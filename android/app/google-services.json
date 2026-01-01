@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "222003182592",
+    "project_id": "ride-sharing-9c176",
+    "storage_bucket": "ride-sharing-9c176.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:222003182592:android:851e41ecde3127c1a42ce5",
+        "android_client_info": {
+          "package_name": "com.antigravity.rideshare.ride_share_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDpBw_DvDIJ16OZk1odua7q5hv0NcHy138"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
