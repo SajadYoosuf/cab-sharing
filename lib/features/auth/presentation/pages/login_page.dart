@@ -38,7 +38,7 @@ class _LoginPageState extends State<LoginPage> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Sign in to continue your eco-journey',
+                  'Sign in to continue  eco-journey',
                   style: TextStyle(color: AppColors.textSecondary),
                 ),
                 const SizedBox(height: 48),
