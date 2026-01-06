@@ -81,9 +81,11 @@ class _RegisterPageState extends State<RegisterPage> {
                                   _emailController.text,
                                   _passwordController.text,
                                 );
-                                if (success && mounted) {
+                                if (success) {
+                                  if (!mounted) return;
                                   Navigator.pushReplacementNamed(context, '/home');
-                                } else if (mounted) {
+                                } else {
+                                  if (!mounted) return;
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(content: Text(auth.error ?? 'Error')),
                                   );

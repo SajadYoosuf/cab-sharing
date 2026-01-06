@@ -18,6 +18,7 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     Future.microtask(() {
+        if (!mounted) return;
         final authProvider = Provider.of<AuthProvider>(context, listen: false);
         final rideProvider = Provider.of<RideProvider>(context, listen: false);
         

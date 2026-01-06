@@ -72,9 +72,11 @@ class _LoginPageState extends State<LoginPage> {
                                   _emailController.text,
                                   _passwordController.text,
                                 );
-                                if (success && mounted) {
+                                if (success) {
+                                  if (!mounted) return;
                                   Navigator.pushReplacementNamed(context, '/home');
-                                } else if (mounted) {
+                                } else {
+                                  if (!mounted) return;
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(content: Text(auth.error ?? 'Login Failed')),
                                   );

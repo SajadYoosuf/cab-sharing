@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../../ride/domain/entities/ride_entity.dart'; // Reusing RideEntity
 
 class AdminDashboardPage extends StatefulWidget {
   const AdminDashboardPage({super.key});
