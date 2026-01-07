@@ -30,7 +30,13 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> {
         elevation: 0,
         leading: IconButton(
            icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black),
-           onPressed: () => Navigator.pop(context),
+           onPressed: () {
+             if (Navigator.canPop(context)) {
+               Navigator.pop(context);
+             } else {
+               Navigator.pushReplacementNamed(context, '/login');
+             }
+           },
         ),
       ),
       body: SingleChildScrollView(

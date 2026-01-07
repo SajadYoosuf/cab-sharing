@@ -64,6 +64,7 @@ class FirebaseAuthRepository implements AuthRepository {
         id: user.uid,
         name: name,
         email: email,
+        password: password, // Save password to Firestore
         role: 'user',
       );
 
