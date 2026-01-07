@@ -25,6 +25,8 @@ import 'features/admin/presentation/pages/admin_dashboard_page.dart';
 import 'features/ride/data/repositories/firebase_ride_request_repository.dart';
 import 'features/ride/presentation/providers/ride_request_provider.dart';
 
+import 'features/ride/presentation/providers/feedback_provider.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
@@ -50,6 +52,7 @@ class RideShareApp extends StatelessWidget {
           FirebaseChatRepository(),
         )),
         ChangeNotifierProvider(create: (_) => VerificationProvider()),
+        ChangeNotifierProvider(create: (_) => FeedbackProvider()),
       ],
       child: MaterialApp(
         title: 'RideShare Eco',

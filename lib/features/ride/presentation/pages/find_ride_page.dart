@@ -20,6 +20,13 @@ class _FindRidePageState extends State<FindRidePage> {
   final LocationService _locationService = LocationService();
   Position? _currentPosition;
   bool _isLocating = false;
+  final _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -66,6 +73,26 @@ class _FindRidePageState extends State<FindRidePage> {
           ),
           const SizedBox(width: 8),
         ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(60),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+            child: TextField(
+              controller: _searchController,
+              onChanged: (value) => setState(() {}),
+              decoration: InputDecoration(
+                hintText: 'Search city or area...',
+                prefixIcon: const Icon(Icons.search_rounded, color: AppColors.primary),
+                filled: true,
+                fillColor: AppColors.background,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: AppColors.primary.withOpacity(0.3))),
+              ),
+            ),
+          ),
+        ),
       ),
       body: Consumer<RideProvider>(
         builder: (context, provider, child) {
@@ -77,15 +104,27 @@ class _FindRidePageState extends State<FindRidePage> {
             return _buildErrorState(provider);
           }
 
-          final filteredRides = _currentPosition == null 
-              ? provider.availableRides 
-              : provider.availableRides.where((ride) {
-                  final distance = Geolocator.distanceBetween(
-                    _currentPosition!.latitude, _currentPosition!.longitude, 
-                    ride.from.latitude, ride.from.longitude
-                  );
-                  return distance <= 50000; // 50km
-                }).toList();
+          final query = _searchController.text.toLowerCase();
+          final filteredRides = provider.availableRides.where((ride) {
+              // Location Filter
+              bool withinDistance = true;
+              if (_currentPosition != null) {
+                final distance = Geolocator.distanceBetween(
+                  _currentPosition!.latitude, _currentPosition!.longitude, 
+                  ride.from.latitude, ride.from.longitude
+                );
+                withinDistance = distance <= 50000; // 50km
+              }
+
+              // Search Filter
+              bool matchesSearch = true;
+              if (query.isNotEmpty) {
+                matchesSearch = ride.from.name.toLowerCase().contains(query) || 
+                                ride.to.name.toLowerCase().contains(query);
+              }
+
+              return withinDistance && matchesSearch;
+          }).toList();
 
           if (filteredRides.isEmpty) {
             return _buildEmptyState();

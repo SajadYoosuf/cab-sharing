@@ -6,6 +6,7 @@ abstract class RideRepository {
   Future<List<RideEntity>> getUserRides(String userId); // For dashboard
   Future<void> updateRideStatus(String rideId, RideStatus status);
   Future<void> updateHostLocation(String rideId, double lat, double lng);
+  Future<void> updateLiveStatus(String rideId, bool isLive);
   Future<void> decrementSeats(String rideId);
   Future<RideEntity?> getRideById(String rideId);
 }

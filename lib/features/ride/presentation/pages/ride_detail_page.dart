@@ -11,6 +11,8 @@ import 'package:ride_share_app/features/auth/presentation/providers/auth_provide
 import 'package:ride_share_app/features/ride/presentation/providers/ride_request_provider.dart';
 import 'package:ride_share_app/features/ride/domain/entities/ride_request_entity.dart';
 import 'package:ride_share_app/features/ride/presentation/providers/ride_provider.dart';
+import 'package:ride_share_app/features/ride/presentation/providers/feedback_provider.dart';
+import 'package:ride_share_app/features/ride/domain/entities/feedback_entity.dart';
 
 class RideDetailPage extends StatefulWidget {
   final RideEntity ride;
@@ -28,6 +30,7 @@ class _RideDetailPageState extends State<RideDetailPage> {
   RideRequestStatus? _requestStatus;
   bool _isLoadingStatus = true;
   bool _isHost = false;
+  bool _hasSubmittedFeedback = false;
 
   @override
   void initState() {
@@ -35,8 +38,24 @@ class _RideDetailPageState extends State<RideDetailPage> {
     final user = Provider.of<AuthProvider>(context, listen: false).currentUser;
     _isHost = user?.id == widget.ride.hostId;
     _startTracking();
-    if (!_isHost) _checkRequestStatus();
-    else setState(() => _isLoadingStatus = false);
+    if (!_isHost) {
+      _checkRequestStatus();
+    } else {
+      setState(() => _isLoadingStatus = false);
+    }
+    
+    if (widget.ride.status == RideStatus.completed) {
+      _checkFeedbackStatus();
+    }
+  }
+
+  Future<void> _checkFeedbackStatus() async {
+     final auth = Provider.of<AuthProvider>(context, listen: false);
+     final feedbackProvider = Provider.of<FeedbackProvider>(context, listen: false);
+     if (auth.currentUser != null) {
+        final submitted = await feedbackProvider.hasSubmittedFeedback(widget.ride.id, auth.currentUser!.id);
+        if (mounted) setState(() => _hasSubmittedFeedback = submitted);
+     }
   }
 
   Future<void> _checkRequestStatus() async {
@@ -327,6 +346,21 @@ class _RideDetailPageState extends State<RideDetailPage> {
                     const SizedBox(height: 16),
                     _buildRouteInfo(),
                     const SizedBox(height: 32),
+                    Text('Ride Preferences', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 16),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        if (widget.ride.noAlcohol) _buildPrefChip(Icons.no_drinks_rounded, 'No Alcohol'),
+                        if (widget.ride.noSmoking) _buildPrefChip(Icons.smoke_free_rounded, 'No Smoking'),
+                        if (widget.ride.noPets) _buildPrefChip(Icons.pets_rounded, 'No Pets'),
+                        if (widget.ride.noLuggage) _buildPrefChip(Icons.no_backpack_rounded, 'No Luggage'),
+                        if (!widget.ride.noAlcohol && !widget.ride.noSmoking && !widget.ride.noPets && !widget.ride.noLuggage)
+                          Text('No specific preferences set', style: TextStyle(color: Colors.grey.shade400, fontSize: 13)),
+                      ],
+                    ),
+                    const SizedBox(height: 32),
                     Text('Host Profile', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 16),
                     _buildHostInfo(),
@@ -336,6 +370,10 @@ class _RideDetailPageState extends State<RideDetailPage> {
                       const SizedBox(height: 12),
                       _buildNoteSection(),
                     ],
+                    if (widget.ride.status == RideStatus.completed && !_isHost && _requestStatus == RideRequestStatus.accepted) ...[
+                      const SizedBox(height: 32),
+                      _buildFeedbackSection(),
+                    ],
                     const SizedBox(height: 40),
                     if (_isHost)
                       Column(
@@ -344,7 +382,10 @@ class _RideDetailPageState extends State<RideDetailPage> {
                             SizedBox(
                               width: double.infinity,
                               child: ElevatedButton(
-                                onPressed: () => Provider.of<RideProvider>(context, listen: false).updateRideStatus(widget.ride.id, RideStatus.ongoing),
+                                onPressed: () {
+                                  final userId = Provider.of<AuthProvider>(context, listen: false).currentUser?.id ?? '';
+                                  Provider.of<RideProvider>(context, listen: false).updateRideStatus(widget.ride.id, RideStatus.ongoing, userId);
+                                },
                                 style: ElevatedButton.styleFrom(
                                   padding: const EdgeInsets.symmetric(vertical: 20),
                                   backgroundColor: Colors.blue,
@@ -357,7 +398,10 @@ class _RideDetailPageState extends State<RideDetailPage> {
                             SizedBox(
                               width: double.infinity,
                               child: ElevatedButton(
-                                onPressed: () => Provider.of<RideProvider>(context, listen: false).updateRideStatus(widget.ride.id, RideStatus.completed),
+                                onPressed: () {
+                                  final userId = Provider.of<AuthProvider>(context, listen: false).currentUser?.id ?? '';
+                                  Provider.of<RideProvider>(context, listen: false).updateRideStatus(widget.ride.id, RideStatus.completed, userId);
+                                },
                                 style: ElevatedButton.styleFrom(
                                   padding: const EdgeInsets.symmetric(vertical: 20),
                                   backgroundColor: Colors.green,
@@ -525,17 +569,160 @@ class _RideDetailPageState extends State<RideDetailPage> {
     );
   }
 
+    );
+  }
+
+  Widget _buildFeedbackSection() {
+     return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.primary.withOpacity(0.1)),
+      ),
+      child: Column(
+        children: [
+          const Icon(Icons.rate_review_rounded, size: 48, color: AppColors.primary),
+          const SizedBox(height: 16),
+          Text(
+            _hasSubmittedFeedback ? 'Thank you for your feedback!' : 'How was your trip?',
+            style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _hasSubmittedFeedback 
+              ? 'Your review helps us maintain a great community.'
+              : 'Share your experience to help others in the community.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 24),
+          if (!_hasSubmittedFeedback)
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _showFeedbackDialog,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+                child: const Text('Rate Your Experience', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _showFeedbackDialog() {
+    double rating = 5.0;
+    final commentController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: const Text('Trip Feedback'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Rate the host and overall experience'),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(5, (index) => IconButton(
+                  icon: Icon(
+                    index < rating ? Icons.star_rounded : Icons.star_border_rounded,
+                    color: Colors.orange,
+                    size: 32,
+                  ),
+                  onPressed: () => setDialogState(() => rating = index + 1.0),
+                )),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: commentController,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  hintText: 'Add a comment (optional)',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                  filled: true,
+                  fillColor: Colors.grey.shade50,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final auth = Provider.of<AuthProvider>(context, listen: false);
+                final feedbackProvider = Provider.of<FeedbackProvider>(context, listen: false);
+                
+                final feedback = FeedbackEntity(
+                  id: '',
+                  rideId: widget.ride.id,
+                  hostId: widget.ride.hostId,
+                  hostName: widget.ride.hostName,
+                  passengerId: auth.currentUser!.id,
+                  passengerName: auth.currentUser!.name,
+                  rating: rating,
+                  comment: commentController.text.trim(),
+                  createdAt: DateTime.now(),
+                );
+
+                final success = await feedbackProvider.submitFeedback(feedback);
+                if (success && mounted) {
+                  setState(() => _hasSubmittedFeedback = true);
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Feedback submitted successfully!'))
+                  );
+                }
+              },
+              child: const Text('Submit'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildNoteSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Note from Host', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+        const Text('Note from Host', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.grey)),
         const SizedBox(height: 8),
         Text(
           widget.ride.note,
           style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
         ),
       ],
+    );
+  }
+
+  Widget _buildPrefChip(IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: AppColors.textSecondary),
+          const SizedBox(width: 8),
+          Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+        ],
+      ),
     );
   }
 }

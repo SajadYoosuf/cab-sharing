@@ -34,6 +34,13 @@ class RideEntity extends Equatable {
   final String note;
   final double? hostLatitude;
   final double? hostLongitude;
+  
+  // Preferences
+  final bool noAlcohol;
+  final bool noSmoking;
+  final bool noPets;
+  final bool noLuggage;
+  final bool isLive;
 
   const RideEntity({
     required this.id,
@@ -50,6 +57,11 @@ class RideEntity extends Equatable {
     this.note = '',
     this.hostLatitude,
     this.hostLongitude,
+    this.noAlcohol = false,
+    this.noSmoking = false,
+    this.noPets = false,
+    this.noLuggage = false,
+    this.isLive = false,
   });
 
   @override
@@ -64,6 +76,11 @@ class RideEntity extends Equatable {
         price,
         status,
         vehicleType,
-        note
+        note,
+        noAlcohol,
+        noSmoking,
+        noPets,
+        noLuggage,
+        isLive,
       ];
 }

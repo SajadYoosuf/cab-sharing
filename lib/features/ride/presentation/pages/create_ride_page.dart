@@ -34,6 +34,12 @@ class _CreateRidePageState extends State<CreateRidePage> {
   int _seats = 1;
   VehicleType _vehicleType = VehicleType.car; // Default to car
 
+  // Preferences
+  bool _noAlcohol = false;
+  bool _noSmoking = false;
+  bool _noPets = false;
+  bool _noLuggage = false;
+
   @override
   void dispose() {
     _fromController.dispose();
@@ -146,6 +152,10 @@ class _CreateRidePageState extends State<CreateRidePage> {
         seats: _seats,
         price: double.tryParse(_priceController.text) ?? 0.0,
         status: RideStatus.open,
+        noAlcohol: _noAlcohol,
+        noSmoking: _noSmoking,
+        noPets: _noPets,
+        noLuggage: _noLuggage,
       );
 
       final success = await rideProvider.createRide(newRide);
@@ -337,6 +347,44 @@ class _CreateRidePageState extends State<CreateRidePage> {
                   ),
                 ),
               ),
+              const SizedBox(height: 32),
+
+              _buildSectionTitle('Preferences'),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                   _buildPreferenceChip('No Alcohol', _noAlcohol, (v) => setState(() => _noAlcohol = v)),
+                   _buildPreferenceChip('No Smoking', _noSmoking, (v) => setState(() => _noSmoking = v)),
+                   _buildPreferenceChip('No Pets', _noPets, (v) => setState(() => _noPets = v)),
+                   _buildPreferenceChip('No Luggage', _noLuggage, (v) => setState(() => _noLuggage = v)),
+                ],
+              ),
+
+              if (_vehicleType == VehicleType.bike) ...[
+                const SizedBox(height: 32),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.warning_amber_rounded, color: Colors.orange),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Safety Warning: Helmets are mandatory for both host and passenger during bike rides.',
+                          style: TextStyle(color: Colors.orange.shade900, fontSize: 13, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 48),
 
               SizedBox(
@@ -448,6 +496,25 @@ class _CreateRidePageState extends State<CreateRidePage> {
             Text(label, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildPreferenceChip(String label, bool isSelected, Function(bool) onSelected) {
+    return FilterChip(
+      label: Text(label),
+      selected: isSelected,
+      onSelected: onSelected,
+      selectedColor: AppColors.primary.withOpacity(0.2),
+      checkmarkColor: AppColors.primary,
+      labelStyle: TextStyle(
+        color: isSelected ? AppColors.primary : AppColors.textSecondary,
+        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+      ),
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: isSelected ? AppColors.primary : Colors.grey.shade300),
       ),
     );
   }

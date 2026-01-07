@@ -4,6 +4,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:ride_share_app/core/constants/app_colors.dart';
 import 'package:intl/intl.dart';
+import 'admin_ride_detail_page.dart';
 
 class AdminReportsPage extends StatefulWidget {
   const AdminReportsPage({super.key});
@@ -57,6 +58,7 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
     for (var doc in currentMonthRides) {
       totalRevenue += (doc['price'] ?? 0).toDouble();
     }
+    final weeklyRevenue = _getWeeklyRevenue(currentMonthRides);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -89,7 +91,7 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
             child: BarChart(
               BarChartData(
                 alignment: BarChartAlignment.spaceAround,
-                maxY: (currentMonthRides.length * 100).toDouble() + 500, // Dynamic max
+                maxY: (currentMonthRides.isEmpty ? 1000 : (weeklyRevenue.reduce((a, b) => a > b ? a : b) + 500)).toDouble(), // Fixed: Dynamic max based on revenue
                 barTouchData: BarTouchData(
                   enabled: true,
                   touchTooltipData: BarTouchTooltipData(
@@ -131,9 +133,80 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
               ),
             ),
           ),
+          const SizedBox(height: 32),
+          Text('Recent Transactions', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 16),
+          ...currentMonthRides.take(10).map((ride) => _buildTransactionTile(ride)),
         ],
       ),
     );
+  }
+
+  Widget _buildTransactionTile(QueryDocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    final date = (data['dateTime'] as Timestamp).toDate();
+    final status = data['status'] ?? 'open';
+    
+    return InkWell(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => AdminRideDetailPage(rideData: data, rideId: doc.id),
+        ),
+      ),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12)),
+              child: const Icon(Icons.payment_rounded, color: AppColors.primary),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(data['hostName'] ?? 'Unknown Host', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  Text(DateFormat('MMM d, h:mm a').format(date), style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
+                ],
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text('₹${data['price'] ?? 0}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.primary)),
+                Text(
+                  status.toString().toUpperCase(), 
+                  style: TextStyle(
+                    fontSize: 10, 
+                    fontWeight: FontWeight.bold, 
+                    color: status == 'completed' ? Colors.green : Colors.orange
+                  )
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Need to bring weeklyRevenue to scope or recalculate
+  List<double> _getWeeklyRevenue(List<QueryDocumentSnapshot> rides) {
+    final weeklyRevenue = List.filled(5, 0.0);
+    for (var doc in rides) {
+      final date = (doc['dateTime'] as Timestamp).toDate();
+      final weekIndex = (date.day - 1) ~/ 7;
+      if (weekIndex < 5) weeklyRevenue[weekIndex] += (doc['price'] ?? 0).toDouble();
+    }
+    return weeklyRevenue;
   }
 
   List<BarChartGroupData> _generateWeeklyData(List<QueryDocumentSnapshot> rides) {

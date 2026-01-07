@@ -42,95 +42,117 @@ class _AdminVerificationDetailPageState extends State<AdminVerificationDetailPag
 
   @override
   Widget build(BuildContext context) {
-    final user = widget.userData;
-    
-    ImageProvider? selfieProvider;
-    if (user['selfieBase64'] != null) {
-      try {
-        selfieProvider = MemoryImage(base64Decode(user['selfieBase64']));
-      } catch (e) {
-        // Fallback or ignore
-      }
-    } else if (user['selfieUrl'] != null) {
-      selfieProvider = NetworkImage(user['selfieUrl']);
-    }
-
     return Scaffold(
       appBar: AppBar(title: const Text('Verify User')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Column(
-                children: [
-                   CircleAvatar(
-                    radius: 50,
-                    backgroundImage: selfieProvider,
-                    child: selfieProvider == null ? const Icon(Icons.person, size: 50) : null,
-                   ),
-                   const SizedBox(height: 12),
-                   Text(user['name'] ?? '', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-                   Text(user['email'] ?? '', style: const TextStyle(color: Colors.grey)),
-                   Text(user['phone'] ?? '', style: const TextStyle(color: Colors.grey)),
-                ],
-              ),
-            ),
-            const SizedBox(height: 32),
-            const Text('Identity Document', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            _buildImagePreview(user['identityDocBase64'] ?? user['identityDocUrl'], 'Identity Document'),
-            
-            const SizedBox(height: 24),
-            Row(
+      body: StreamBuilder<DocumentSnapshot>(
+        stream: FirebaseFirestore.instance.collection('users').doc(widget.userId).snapshots(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+          final user = snapshot.data!.data() as Map<String, dynamic>;
+          final status = user['verificationStatus'] ?? 'pending';
+
+          ImageProvider? selfieProvider;
+          if (user['selfieBase64'] != null) {
+            try { selfieProvider = MemoryImage(base64Decode(user['selfieBase64'])); } catch (e) {}
+          } else if (user['selfieUrl'] != null) {
+            selfieProvider = NetworkImage(user['selfieUrl']);
+          }
+
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('License Status: ', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                Text(
-                  (user['licenseStatus'] ?? 'none').toString().toUpperCase(), 
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold, 
-                    color: user['licenseStatus'] == 'approved' ? Colors.green : Colors.orange
-                  )
+                Center(
+                  child: Column(
+                    children: [
+                       CircleAvatar(
+                        radius: 50,
+                        backgroundImage: selfieProvider,
+                        child: selfieProvider == null ? const Icon(Icons.person, size: 50) : null,
+                       ),
+                       const SizedBox(height: 12),
+                       Text(user['name'] ?? '', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                       Text(user['email'] ?? '', style: const TextStyle(color: Colors.grey)),
+                       Text(user['phone'] ?? '', style: const TextStyle(color: Colors.grey)),
+                    ],
+                  ),
                 ),
+                const SizedBox(height: 32),
+                const Text('Identity Document', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                _buildImagePreview(user['identityDocBase64'] ?? user['identityDocUrl'], 'Identity Document'),
+                
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    const Text('License Status: ', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    Text(
+                      (user['licenseStatus'] ?? 'none').toString().toUpperCase(), 
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold, 
+                        color: user['licenseStatus'] == 'approved' ? Colors.green : Colors.orange
+                      )
+                    ),
+                  ],
+                ),
+                if (user['licenseBase64'] != null || user['licenseUrl'] != null) ...[
+                   const SizedBox(height: 8),
+                   _buildImagePreview(user['licenseBase64'] ?? user['licenseUrl'], 'Driving License'),
+                ],
+
+                const SizedBox(height: 40),
+                if (status != 'pending')
+                  Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: (status == 'approved' ? Colors.green : Colors.red).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: status == 'approved' ? Colors.green : Colors.red),
+                      ),
+                      child: Text(
+                        'STATUS: ${status.toString().toUpperCase()}',
+                        style: TextStyle(
+                          color: status == 'approved' ? Colors.green : Colors.red,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                        ),
+                      ),
+                    ),
+                  )
+                else if (_isLoading)
+                  const Center(child: CircularProgressIndicator())
+                else
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => _updateStatus('rejected', licenseStatus: 'rejected'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.red,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                          child: const Text('REJECT'),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () => _updateStatus('approved', licenseStatus: (user['licenseBase64'] != null || user['licenseUrl'] != null) ? 'approved' : 'none'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                          child: const Text('APPROVE'),
+                        ),
+                      ),
+                    ],
+                  ),
               ],
             ),
-            if (user['licenseBase64'] != null || user['licenseUrl'] != null) ...[
-               const SizedBox(height: 8),
-               _buildImagePreview(user['licenseBase64'] ?? user['licenseUrl'], 'Driving License'),
-            ],
-
-            const SizedBox(height: 40),
-            if (_isLoading)
-              const Center(child: CircularProgressIndicator())
-            else
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => _updateStatus('rejected', licenseStatus: 'rejected'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.red,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                      ),
-                      child: const Text('REJECT'),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () => _updateStatus('approved', licenseStatus: user['licenseUrl'] != null ? 'approved' : 'none'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                      ),
-                      child: const Text('APPROVE'),
-                    ),
-                  ),
-                ],
-              ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }

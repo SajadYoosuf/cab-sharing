@@ -8,6 +8,8 @@ import 'package:ride_share_app/features/admin/presentation/pages/admin_ride_deta
 import 'package:ride_share_app/features/admin/presentation/pages/admin_reports_page.dart';
 import 'package:ride_share_app/features/admin/presentation/pages/admin_activity_logs_page.dart';
 import 'package:ride_share_app/features/admin/presentation/pages/admin_verification_list_page.dart';
+import 'package:ride_share_app/features/admin/presentation/pages/admin_verification_detail_page.dart';
+import 'package:ride_share_app/features/admin/presentation/pages/admin_feedback_page.dart';
 import 'package:provider/provider.dart';
 import 'package:ride_share_app/features/auth/presentation/providers/auth_provider.dart';
 
@@ -238,6 +240,12 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
             Colors.green,
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminReportsPage())),
           ),
+          _buildActionItem(
+             'Ride Feedback', 
+             Icons.rate_review_rounded, 
+             Colors.blueAccent,
+             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminFeedbackPage())),
+          ),
         ],
       ),
     );
@@ -393,58 +401,102 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   }
 
   Widget _buildUsersTab() {
-     return StreamBuilder<QuerySnapshot>(
-       stream: _firestore.collection('users').snapshots(),
-       builder: (context, snapshot) {
-          if (snapshot.hasError) return const Center(child: Text('Error loading users'));
-          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-          
-          final docs = snapshot.data!.docs;
-          if (docs.isEmpty) return const Center(child: Text('No users registered yet.'));
+    return DefaultTabController(
+      length: 3,
+      child: Column(
+        children: [
+          TabBar(
+            labelColor: AppColors.primary,
+            unselectedLabelColor: Colors.grey,
+            indicatorColor: AppColors.primary,
+            tabs: const [
+              Tab(text: 'Pending'),
+              Tab(text: 'Verified'),
+              Tab(text: 'Rejected'),
+            ],
+          ),
+          Expanded(
+            child: TabBarView(
+              children: [
+                _buildUserListByStatus('pending'),
+                _buildUserListByStatus('approved'),
+                _buildUserListByStatus('rejected'),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-          return ListView.builder(
-            padding: const EdgeInsets.all(20),
-            itemCount: docs.length,
-            itemBuilder: (context, index) {
-              final data = docs[index].data() as Map<String, dynamic>;
-              return Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
-                child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  leading: CircleAvatar(
-                    backgroundColor: Colors.blue.withOpacity(0.1),
-                    child: const Icon(Icons.person_rounded, color: Colors.blue, size: 20),
-                  ),
-                  title: Text(data['name'] ?? 'No Name', style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Row(
-                    children: [
-                      Text(data['email'] ?? 'No Email', style: const TextStyle(fontSize: 12)),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: (data['role'] == 'admin' ? Colors.purple : Colors.grey).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          (data['role'] ?? 'user').toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 8,
-                            fontWeight: FontWeight.bold,
-                            color: data['role'] == 'admin' ? Colors.purple : Colors.grey,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  trailing: const Icon(Icons.verified_user_rounded, color: AppColors.primary, size: 20),
-                ),
-              );
-            },
+  Widget _buildUserListByStatus(String status) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: _firestore
+          .collection('users')
+          .where('verificationStatus', isEqualTo: status)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) return const Center(child: Text('Error loading users'));
+        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+
+        final docs = snapshot.data!.docs;
+        if (docs.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.people_outline_rounded, size: 64, color: Colors.grey.shade300),
+                const SizedBox(height: 16),
+                Text('No $status users found', style: TextStyle(color: Colors.grey.shade500)),
+              ],
+            ),
           );
-       },
-     );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(20),
+          itemCount: docs.length,
+          itemBuilder: (context, index) {
+            final data = docs[index].data() as Map<String, dynamic>;
+            final userId = docs[index].id;
+            
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
+              ),
+              child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => AdminVerificationDetailPage(userId: userId, userData: data),
+                  ),
+                ),
+                leading: CircleAvatar(
+                  backgroundColor: _getStatusColor(status).withOpacity(0.1),
+                  child: Icon(Icons.person_rounded, color: _getStatusColor(status), size: 20),
+                ),
+                title: Text(data['name'] ?? 'No Name', style: const TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: Text(data['email'] ?? 'No Email', style: const TextStyle(fontSize: 12)),
+                trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status) {
+      case 'approved': return Colors.green;
+      case 'rejected': return Colors.red;
+      case 'pending': return Colors.orange;
+      default: return Colors.grey;
+    }
   }
 
   Future<void> _deleteRide(String rideId) async {

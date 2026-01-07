@@ -5,6 +5,7 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../ride/presentation/providers/ride_provider.dart';
 import '../../../ride/domain/entities/ride_entity.dart';
 import '../../../chat/presentation/pages/chat_page.dart';
+import '../../../auth/presentation/providers/auth_provider.dart';
 
 class ChatListPage extends StatelessWidget {
   const ChatListPage({super.key});
@@ -12,6 +13,8 @@ class ChatListPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rideProvider = Provider.of<RideProvider>(context);
+    final authProvider = Provider.of<AuthProvider>(context);
+    final currentUserId = authProvider.currentUser?.id ?? '';
     final chats = rideProvider.myRides;
 
     return Scaffold(
@@ -29,7 +32,7 @@ class ChatListPage extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Container(
+                   Container(
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
                       color: Colors.grey.shade100,
@@ -60,13 +63,16 @@ class ChatListPage extends StatelessWidget {
               itemCount: chats.length,
               itemBuilder: (context, index) {
                 final ride = chats[index];
-                return _buildChatTile(context, ride);
+                return _buildChatTile(context, ride, currentUserId);
               },
             ),
     );
   }
 
-  Widget _buildChatTile(BuildContext context, RideEntity ride) {
+  Widget _buildChatTile(BuildContext context, RideEntity ride, String currentUserId) {
+    bool isHost = ride.hostId == currentUserId;
+    String chatTitle = isHost ? 'Ride Chat: ${ride.to.name}' : 'Chat with ${ride.hostName}';
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -90,7 +96,7 @@ class ChatListPage extends StatelessWidget {
               MaterialPageRoute(
                 builder: (context) => ChatPage(
                   rideId: ride.id,
-                  title: 'Chat with ${ride.hostName}',
+                  title: chatTitle,
                 ),
               ),
             );
@@ -102,7 +108,7 @@ class ChatListPage extends StatelessWidget {
                 CircleAvatar(
                   radius: 28,
                   backgroundColor: AppColors.primary.withOpacity(0.1),
-                  child: Text(ride.hostName[0], style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 18)),
+                  child: Icon(isHost ? Icons.groups_rounded : Icons.person_rounded, color: AppColors.primary),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -117,7 +123,7 @@ class ChatListPage extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Host: ${ride.hostName}',
+                        isHost ? 'You are the host' : 'Host: ${ride.hostName}',
                         style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
                       ),
                     ],

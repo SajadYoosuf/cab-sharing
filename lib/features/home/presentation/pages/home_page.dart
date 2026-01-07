@@ -48,7 +48,9 @@ class _HomePageState extends State<HomePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildEcoCard(),
+                  // _buildEcoCard(),
+                  // const SizedBox(height: 24),
+                  _buildMyActiveTrips(user?.id),
                   const SizedBox(height: 24),
                   if (user != null) _buildIncomingRequestsWatcher(user.id),
                   _buildActionGrid(context),
@@ -459,24 +461,7 @@ class _HomePageState extends State<HomePage> {
           ));
         }
         if (rideProvider.availableRides.isEmpty) {
-          return Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(40),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: Column(
-              children: [
-                Icon(Icons.directions_car_outlined, size: 64, color: Colors.grey.shade300),
-                const SizedBox(height: 16),
-                Text(
-                  'No rides available right now',
-                  style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.w500),
-                ),
-              ],
-            ),
-          );
+          return const SizedBox.shrink();
         }
         return ListView.builder(
           shrinkWrap: true,
@@ -632,6 +617,152 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildMyActiveTrips(String? userId) {
+    if (userId == null) return const SizedBox.shrink();
+
+    return Consumer<RideProvider>(
+      builder: (context, provider, _) {
+        final activeTrips = provider.myRides.where((r) => 
+          r.status != RideStatus.completed && 
+          r.status != RideStatus.cancelled
+        ).toList();
+
+        if (activeTrips.isEmpty) return const SizedBox.shrink();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: 12),
+              child: Text(
+                'My Active Rides',
+                style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+              ),
+            ),
+            SizedBox(
+              height: 200,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: activeTrips.length,
+                itemBuilder: (context, index) {
+                  final ride = activeTrips[index];
+                  final isHost = ride.hostId == userId;
+                  final isOngoing = ride.status == RideStatus.ongoing;
+
+                  return Container(
+                    width: MediaQuery.of(context).size.width * 0.85,
+                    margin: const EdgeInsets.only(right: 16, bottom: 8),
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: isOngoing 
+                          ? [Colors.blue.shade700, Colors.blue.shade900]
+                          : [Colors.indigo.shade500, Colors.indigo.shade800],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: (isOngoing ? Colors.blue : Colors.indigo).withOpacity(0.3),
+                          blurRadius: 12,
+                          offset: const Offset(0, 6)
+                        )
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            isHost 
+                              ? Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(20)),
+                                  child: const Text('YOUR OFFER', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 9)),
+                                )
+                              : FutureBuilder<RideRequestStatus?>(
+                                  future: Provider.of<RideRequestProvider>(context, listen: false).getRequestStatus(ride.id, userId),
+                                  builder: (context, statusSnapshot) {
+                                    final status = statusSnapshot.data;
+                                    String label = isOngoing ? 'ONGOING' : 'ACCEPTED';
+                                    if (status == RideRequestStatus.pending) label = 'PENDING';
+                                    
+                                    return Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                      decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(20)),
+                                      child: Text(
+                                        label,
+                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 9),
+                                      ),
+                                    );
+                                  },
+                                ),
+                            if (isHost && isOngoing)
+                              Switch.adaptive(
+                                value: ride.isLive,
+                                activeColor: Colors.greenAccent,
+                                onChanged: (val) => provider.toggleLiveTracking(ride.id, val, userId),
+                              ),
+                          ],
+                        ),
+                        const Spacer(),
+                        Text(
+                          ride.to.name,
+                          style: GoogleFonts.outfit(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          isHost ? 'Hosting: ${ride.seats} seats' : 'Host: ${ride.hostName}',
+                          style: const TextStyle(color: Colors.white70, fontSize: 12),
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => RideDetailPage(ride: ride))),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.white,
+                                  foregroundColor: Colors.blue.shade900,
+                                  padding: const EdgeInsets.symmetric(vertical: 0),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
+                                ),
+                                child: const Text('Details', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                              ),
+                            ),
+                            if (isHost && !isOngoing) ...[
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed: () => provider.updateRideStatus(ride.id, RideStatus.ongoing, userId),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.greenAccent,
+                                    foregroundColor: Colors.black,
+                                    padding: const EdgeInsets.symmetric(vertical: 0),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
+                                  ),
+                                  child: const Text('Start', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                ),
+                              ),
+                            ]
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 24),
+          ],
+        );
+      },
     );
   }
 

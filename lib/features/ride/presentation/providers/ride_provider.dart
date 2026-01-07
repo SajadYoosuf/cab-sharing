@@ -70,10 +70,24 @@ class RideProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> updateRideStatus(String rideId, RideStatus status) async {
+  Future<void> updateRideStatus(String rideId, RideStatus status, String userId) async {
     try {
       await _repository.updateRideStatus(rideId, status);
-      loadAvailableRides();
+      await loadAvailableRides();
+      await loadMyRides(userId);
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+    }
+  }
+
+  Future<void> toggleLiveTracking(String rideId, bool isLive, String userId) async {
+    try {
+      // We need a way to update just the isLive field. 
+      // For now, I'll direct update via firestore in repository or add method to repo.
+      // I'll add method to repository for better abstraction.
+      await _repository.updateLiveStatus(rideId, isLive);
+      await loadMyRides(userId);
     } catch (e) {
       _error = e.toString();
       notifyListeners();

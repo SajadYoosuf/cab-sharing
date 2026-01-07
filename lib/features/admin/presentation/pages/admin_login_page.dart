@@ -27,148 +27,83 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
     });
 
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    
-    // Check for hardcoded credentials first
     final inputEmail = _emailController.text.trim();
     final inputPass = _passwordController.text.trim();
 
-    // Support both 'admin' and 'admin@ecoride.com' as shortcuts
-    if ((inputEmail == 'admin' || inputEmail == 'admin@ecoride.com') && 
-        inputPass == 'admin123') {
-       
+    // 1. Support hardcoded admin shortcut
+    if ((inputEmail == 'admin' || inputEmail == 'admin@ecoride.com') && inputPass == 'admin123') {
        const adminEmail = 'admin@ecoride.com';
        const adminPass = 'admin123';
-       
        bool success = await authProvider.login(adminEmail, adminPass);
        
        if (!success) {
-         // Fallback: Check Firestore directly for existing admin user (Bypass for Recaptcha/Auth issues)
+         // Fallback A: Manual Firestore check (bypass auth issues)
          try {
            final snapshot = await FirebaseFirestore.instance
                .collection('users')
                .where('email', isEqualTo: 'admin@ecoride.com')
-               .limit(1)
-               .get();
+               .limit(1).get();
 
-               if (snapshot.docs.isNotEmpty) {
-                 final doc = snapshot.docs.first;
-                 if (doc.data()['role'] == 'admin') {
-                    // Found the admin doc! Force login.
-                    final adminUser = UserEntity.fromMap({...doc.data(), 'id': doc.id});
-                    await Provider.of<AuthProvider>(context, listen: false).setManualUser(adminUser);
-                    
-                    if (mounted) {
-                      Navigator.pushAndRemoveUntil(
-                        context,
-                        MaterialPageRoute(builder: (context) => const AdminDashboardPage()),
-                        (route) => false,
-                      );
-                    }
-                    return; // Stop here, we are logged in!
-                 }
-               }
-             } catch (e) {
-               print('Manual admin check failed: $e');
+           if (snapshot.docs.isNotEmpty) {
+             final doc = snapshot.docs.first;
+             if (doc.data()['role'] == 'admin') {
+                final adminUser = UserEntity.fromMap({...doc.data(), 'id': doc.id});
+                await Provider.of<AuthProvider>(context, listen: false).setManualUser(adminUser);
+                if (mounted) {
+                  Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const AdminDashboardPage()), (r) => false);
+                }
+                return;
              }
-         }
-       }
+           }
+         } catch (e) { print('Manual check failed: $e'); }
 
-       if (!success) {
-         // Login failed and Manual Check failed.
-         // Due to Firebase 'Email Enumeration Protection', we might receive 'invalid-credential'
-         // for BOTH 'wrong password' and 'user not found'.
-         // So, we blindly attempt to REGISTER the admin account now.
-         
+         // Fallback B: Attempt auto-registration
          final registerSuccess = await authProvider.register('Administrator', adminEmail, adminPass);
-         
          if (registerSuccess) {
-            // Registration worked! Proceed as if login worked.
             success = true;
          } else {
-            // Registration failed too.
-            // If it failed because "email already ready in use", then the original login failure 
-            // was definitely a WRONG PASSWORD.
             final error = authProvider.error ?? '';
-            if (error.contains('already registered') || error.contains('email-already-in-use')) {
-               if (mounted) {
-                  setState(() {
-                    _errorMessage = 'Incorrect Admin Password. Account exists.';
-                    _isLoading = false;
-                  });
-               }
-            } else {
-               // Some other error (network, weak password, etc)
-               if (mounted) {
-                  setState(() {
-                    _errorMessage = error;
-                    _isLoading = false;
-                  });
-               }
+            if (mounted) {
+               setState(() {
+                 _errorMessage = error.contains('already registered') ? 'Incorrect password for existing admin.' : error;
+                 _isLoading = false;
+               });
             }
+            return;
          }
        }
 
        if (success) {
-         // CRITICAL: Ensure this user is marked as admin in Firestore
-         // This fixes the permission issue where the user might exist but not have the 'admin' role
+         // Update/Ensure role
          try {
             await FirebaseFirestore.instance.collection('users').doc(authProvider.currentUser!.id).set({
               'role': 'admin',
               'email': adminEmail,
               'name': 'Administrator',
-              'verificationStatus': 'approved', // Admins are auto-approved
+              'verificationStatus': 'approved',
             }, SetOptions(merge: true));
-            
-            // Reload user to get the new role content
             await authProvider.checkAuthStatus();
-         } catch (e) {
-            print('Error setting admin role: $e');
-         }
+         } catch (e) { print('Role update failed: $e'); }
 
          if (mounted) {
-           Navigator.pushAndRemoveUntil(
-             context,
-             MaterialPageRoute(builder: (context) => const AdminDashboardPage()),
-             (route) => false,
-           );
-         }
-       } else {
-         if (mounted) {
-           setState(() {
-             _errorMessage = authProvider.error ?? 'Authentication failed';
-             _isLoading = false;
-           });
+            Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const AdminDashboardPage()), (r) => false);
          }
        }
     } else {
-      // Allow logging in with any other admin credentials if they exist
-       final success = await authProvider.login(_emailController.text.trim(), _passwordController.text.trim());
+       // 2. Regular Admin Login
+       final success = await authProvider.login(inputEmail, inputPass);
        if (success) {
          final user = authProvider.currentUser;
          if (user != null && user.role == 'admin') {
-            if (mounted) {
-              Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(builder: (context) => const AdminDashboardPage()),
-                (route) => false,
-              );
-            }
+            if (mounted) Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const AdminDashboardPage()), (r) => false);
          } else {
             if (mounted) {
-              setState(() {
-                _errorMessage = 'Access Denied: Not an admin account';
-                _isLoading = false;
-              });
-              authProvider.logout();
+               setState(() { _errorMessage = 'Access Denied: Not an admin account'; _isLoading = false; });
+               authProvider.logout();
             }
          }
        } else {
-         if (mounted) {
-            setState(() {
-              _errorMessage = authProvider.error ?? 'Login Failed';
-              _isLoading = false;
-            });
-         }
+         if (mounted) setState(() { _errorMessage = authProvider.error ?? 'Login Failed'; _isLoading = false; });
        }
     }
   }

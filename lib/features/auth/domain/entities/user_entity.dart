@@ -9,6 +9,13 @@ class UserEntity extends Equatable {
   final bool isPhoneVerified;
   final String verificationStatus; // 'unverified', 'pending', 'approved', 'rejected'
   final String role; 
+  final String? phone;
+  final String? identityDocBase64;
+  final String? selfieBase64;
+  final String? licenseBase64;
+  final String? identityDocUrl;
+  final String? selfieUrl;
+  final String? licenseUrl;
 
   const UserEntity({
     required this.id,
@@ -19,10 +26,21 @@ class UserEntity extends Equatable {
     this.isPhoneVerified = false,
     this.verificationStatus = 'unverified',
     this.role = 'user',
+    this.phone,
+    this.identityDocBase64,
+    this.selfieBase64,
+    this.licenseBase64,
+    this.identityDocUrl,
+    this.selfieUrl,
+    this.licenseUrl,
   });
 
   @override
-  List<Object?> get props => [id, email, name, password, isVerified, isPhoneVerified, verificationStatus, role];
+  List<Object?> get props => [
+        id, email, name, password, isVerified, isPhoneVerified, 
+        verificationStatus, role, phone, identityDocBase64, selfieBase64, 
+        licenseBase64, identityDocUrl, selfieUrl, licenseUrl
+      ];
 
   Map<String, dynamic> toMap() {
     return {
@@ -34,6 +52,13 @@ class UserEntity extends Equatable {
       'isPhoneVerified': isPhoneVerified,
       'verificationStatus': verificationStatus,
       'role': role,
+      'phone': phone,
+      'identityDocBase64': identityDocBase64,
+      'selfieBase64': selfieBase64,
+      'licenseBase64': licenseBase64,
+      'identityDocUrl': identityDocUrl,
+      'selfieUrl': selfieUrl,
+      'licenseUrl': licenseUrl,
     };
   }
 
@@ -47,6 +72,13 @@ class UserEntity extends Equatable {
       isPhoneVerified: map['isPhoneVerified'] ?? false,
       verificationStatus: map['verificationStatus'] ?? 'unverified',
       role: map['role'] ?? 'user',
+      phone: map['phone'],
+      identityDocBase64: map['identityDocBase64'],
+      selfieBase64: map['selfieBase64'],
+      licenseBase64: map['licenseBase64'],
+      identityDocUrl: map['identityDocUrl'],
+      selfieUrl: map['selfieUrl'],
+      licenseUrl: map['licenseUrl'],
     );
   }
 }

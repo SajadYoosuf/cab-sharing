@@ -33,6 +33,11 @@ class FirebaseRideRepository implements RideRepository {
         'status': ride.status.toString().split('.').last,
         'vehicleType': ride.vehicleType.toString().split('.').last,
         'note': ride.note,
+        'noAlcohol': ride.noAlcohol,
+        'noSmoking': ride.noSmoking,
+        'noPets': ride.noPets,
+        'noLuggage': ride.noLuggage,
+        'isLive': ride.isLive,
         'createdAt': FieldValue.serverTimestamp(),
       };
 
@@ -69,17 +74,45 @@ class FirebaseRideRepository implements RideRepository {
   @override
   Future<List<RideEntity>> getUserRides(String userId) async {
     try {
-      final snapshot = await _firestore
+      // 1. Get rides hosted by user
+      final hostSnapshot = await _firestore
           .collection('rides')
           .where('hostId', isEqualTo: userId)
           .get();
 
-      final rides = snapshot.docs.map((doc) => _mapDocToEntity(doc)).toList();
+      // 2. Get rides where user is an accepted passenger
+      final requestSnapshot = await _firestore
+          .collection('ride_requests')
+          .where('passengerId', isEqualTo: userId)
+          .where('status', whereIn: ['accepted', 'pending'])
+          .get();
       
+      final Set<String> rideIds = requestSnapshot.docs
+          .map((doc) => doc.data()['rideId'] as String)
+          .toSet();
+
+      final List<RideEntity> rides = hostSnapshot.docs.map((doc) => _mapDocToEntity(doc)).toList();
+
+      // Fetch joined rides by ID if there are any
+      if (rideIds.isNotEmpty) {
+          // Firestore 'whereIn' supports up to 10-30 IDs usually. 
+          // For now, simple fetch is fine.
+          for (var id in rideIds) {
+             final rideDoc = await _firestore.collection('rides').doc(id).get();
+             if (rideDoc.exists) {
+                rides.add(_mapDocToEntity(rideDoc));
+             }
+          }
+      }
+      
+      // Remove duplicates if any (shouldn't be, but safe)
+      final seenIds = <String>{};
+      final uniqueRides = rides.where((r) => seenIds.add(r.id)).toList();
+
       // Sort by dateTime descending
-      rides.sort((a, b) => b.dateTime.compareTo(a.dateTime));
+      uniqueRides.sort((a, b) => b.dateTime.compareTo(a.dateTime));
       
-      return rides;
+      return uniqueRides;
     } on FirebaseException catch (e) {
       throw FirestoreFailure('Database error: ${e.message}');
     } catch (e) {
@@ -107,6 +140,17 @@ class FirebaseRideRepository implements RideRepository {
       });
     } catch (e) {
       throw FirestoreFailure('Failed to update host location');
+    }
+  }
+
+  @override
+  Future<void> updateLiveStatus(String rideId, bool isLive) async {
+    try {
+      await _firestore.collection('rides').doc(rideId).update({
+        'isLive': isLive,
+      });
+    } catch (e) {
+      throw FirestoreFailure('Failed to update live status');
     }
   }
 
@@ -173,6 +217,11 @@ class FirebaseRideRepository implements RideRepository {
       note: data['note'] ?? '',
       hostLatitude: (data['hostLatitude'] as num?)?.toDouble(),
       hostLongitude: (data['hostLongitude'] as num?)?.toDouble(),
+      noAlcohol: data['noAlcohol'] ?? false,
+      noSmoking: data['noSmoking'] ?? false,
+      noPets: data['noPets'] ?? false,
+      noLuggage: data['noLuggage'] ?? false,
+      isLive: data['isLive'] ?? false,
     );
   }
 

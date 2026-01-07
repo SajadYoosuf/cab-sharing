@@ -156,11 +156,6 @@ class _ChatPageState extends State<ChatPage> {
       ),
       child: Row(
         children: [
-          Container(
-            decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(12)),
-            child: IconButton(icon: const Icon(Icons.add_rounded, color: Colors.grey), onPressed: () {}),
-          ),
-          const SizedBox(width: 12),
           Expanded(
             child: TextField(
               controller: _controller,
