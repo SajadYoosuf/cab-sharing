@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:ride_share_app/features/auth/domain/entities/user_entity.dart';
+import 'package:ride_share_app/features/auth/presentation/providers/auth_provider.dart';
 import '../../data/repositories/admin_auth_repository.dart';
 import 'admin_dashboard_page.dart';
 
@@ -22,26 +26,89 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
       _errorMessage = '';
     });
 
-    final success = await _repository.login(
-      _emailController.text.trim(),
-      _passwordController.text.trim(),
-    );
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    
+    // Check for hardcoded credentials first
+    if (_emailController.text.trim() == 'admin' && _passwordController.text.trim() == 'admin123') {
+       // Perform real firebase auth with a reserved admin email
+       const adminEmail = 'admin@ecoride.com';
+       const adminPass = 'admin123'; // In a real app, this should be secure or managed via console
+       
+       bool success = await authProvider.login(adminEmail, adminPass);
+       
+       if (!success) {
+         // If login fails, try to register this admin user (first run setup)
+         if (authProvider.error != null && authProvider.error!.contains('user-not-found') || authProvider.error!.contains('No user found')) {
+            success = await authProvider.register('Administrator', adminEmail, adminPass);
+            // We need to enforce role update here if register doesn't do it or defaults to 'user'
+            // But for now, let's rely on standard flow or assume we can update it manually or via another tool.
+            // Ideally, we'd update Firestore role here:
+            // await FirebaseFirestore.instance.collection('users').doc(authProvider.currentUser!.id).update({'role': 'admin'});
+         }
+       }
 
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-      });
+       if (success) {
+         // CRITICAL: Ensure this user is marked as admin in Firestore
+         // This fixes the permission issue where the user might exist but not have the 'admin' role
+         try {
+            await FirebaseFirestore.instance.collection('users').doc(authProvider.currentUser!.id).set({
+              'role': 'admin',
+              'email': adminEmail,
+              'name': 'Administrator',
+              'verificationStatus': 'approved', // Admins are auto-approved
+            }, SetOptions(merge: true));
+            
+            // Reload user to get the new role content
+            await authProvider.checkAuthStatus();
+         } catch (e) {
+            print('Error setting admin role: $e');
+         }
 
-      if (success) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const AdminDashboardPage()),
-        );
-      } else {
-        setState(() {
-          _errorMessage = 'Invalid admin credentials';
-        });
-      }
+         if (mounted) {
+           Navigator.pushAndRemoveUntil(
+             context,
+             MaterialPageRoute(builder: (context) => const AdminDashboardPage()),
+             (route) => false,
+           );
+         }
+       } else {
+         if (mounted) {
+           setState(() {
+             _errorMessage = authProvider.error ?? 'Authentication failed';
+             _isLoading = false;
+           });
+         }
+       }
+    } else {
+      // Allow logging in with any other admin credentials if they exist
+       final success = await authProvider.login(_emailController.text.trim(), _passwordController.text.trim());
+       if (success) {
+         final user = authProvider.currentUser;
+         if (user != null && user.role == 'admin') {
+            if (mounted) {
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (context) => const AdminDashboardPage()),
+                (route) => false,
+              );
+            }
+         } else {
+            if (mounted) {
+              setState(() {
+                _errorMessage = 'Access Denied: Not an admin account';
+                _isLoading = false;
+              });
+              authProvider.logout();
+            }
+         }
+       } else {
+         if (mounted) {
+            setState(() {
+              _errorMessage = authProvider.error ?? 'Login Failed';
+              _isLoading = false;
+            });
+         }
+       }
     }
   }
 

@@ -1,7 +1,8 @@
 import 'package:equatable/equatable.dart';
 
 enum RideType { offer, request }
-enum RideStatus { open, booked, completed, cancelled }
+enum RideStatus { open, booked, ongoing, completed, cancelled }
+enum VehicleType { bike, car }
 
 class RideLocation extends Equatable {
   final String name;
@@ -29,7 +30,10 @@ class RideEntity extends Equatable {
   final int seats;
   final double price;
   final RideStatus status;
-  // Could add passengers list later
+  final VehicleType vehicleType;
+  final String note;
+  final double? hostLatitude;
+  final double? hostLongitude;
 
   const RideEntity({
     required this.id,
@@ -42,8 +46,24 @@ class RideEntity extends Equatable {
     required this.seats,
     required this.price,
     this.status = RideStatus.open,
+    this.vehicleType = VehicleType.car,
+    this.note = '',
+    this.hostLatitude,
+    this.hostLongitude,
   });
 
   @override
-  List<Object?> get props => [id, hostId, type, from, to, dateTime, seats, price, status];
+  List<Object?> get props => [
+        id,
+        hostId,
+        type,
+        from,
+        to,
+        dateTime,
+        seats,
+        price,
+        status,
+        vehicleType,
+        note
+      ];
 }

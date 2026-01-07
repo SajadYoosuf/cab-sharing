@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../constants/app_colors.dart';
+import 'package:ride_share_app/core/constants/app_colors.dart';
+import 'package:flutter_animate/flutter_animate.dart'; // Added missing import for .animate()
 
 class AppTheme {
   static ThemeData get lightTheme {
@@ -43,25 +44,37 @@ class AppTheme {
           ),
         ),
       ),
+      cardTheme: CardThemeData(
+        color: AppColors.surface,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: Colors.grey.shade100),
+        ),
+      ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: Colors.white,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        fillColor: Colors.grey.shade50,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.grey.shade300),
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: Colors.grey.shade200),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.grey.shade300),
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: Colors.grey.shade200),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.primary, width: 2),
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: AppColors.primary, width: 1.5),
         ),
-        labelStyle: const TextStyle(color: AppColors.textSecondary),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: AppColors.error, width: 1),
+        ),
+        labelStyle: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+        hintStyle: TextStyle(color: AppColors.textHint),
       ),
-      // cardTheme removed to fix build error
 
     );
   }

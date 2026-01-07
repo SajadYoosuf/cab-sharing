@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:ride_share_app/core/constants/app_colors.dart';
 import 'package:provider/provider.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../domain/entities/ride_entity.dart';
 import '../providers/ride_provider.dart';
 import '../../../../features/auth/presentation/providers/auth_provider.dart';
@@ -25,15 +28,18 @@ class _CreateRidePageState extends State<CreateRidePage> {
   final _toController = TextEditingController();
   
   final _priceController = TextEditingController();
+  final _noteController = TextEditingController(); // Added note controller
   DateTime _selectedDate = DateTime.now();
   TimeOfDay _selectedTime = TimeOfDay.now();
   int _seats = 1;
+  VehicleType _vehicleType = VehicleType.car; // Default to car
 
   @override
   void dispose() {
     _fromController.dispose();
     _toController.dispose();
     _priceController.dispose();
+    _noteController.dispose(); // Dispose note controller
     super.dispose();
   }
 
@@ -78,7 +84,7 @@ class _CreateRidePageState extends State<CreateRidePage> {
       context: context,
       initialDate: _selectedDate,
       firstDate: DateTime.now(),
-      lastDate: DateTime(2025),
+      lastDate: DateTime(2030), // Fixed: Updated to 2030
     );
     if (picked != null && picked != _selectedDate) {
       setState(() {
@@ -131,7 +137,9 @@ class _CreateRidePageState extends State<CreateRidePage> {
         id: '', 
         hostId: user.id,
         hostName: user.name,
-        type: _rideType,
+        type: RideType.offer,
+        vehicleType: _vehicleType, 
+        note: _noteController.text,
         from: _fromLocation!,
         to: _toLocation!,
         dateTime: finalDateTime,
@@ -140,18 +148,22 @@ class _CreateRidePageState extends State<CreateRidePage> {
         status: RideStatus.open,
       );
 
-      try {
-        await rideProvider.createRide(newRide);
-        if (mounted) {
+      final success = await rideProvider.createRide(newRide);
+      if (mounted) {
+        if (success) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Ride created successfully!')),
+            const SnackBar(
+              content: Text('Ride created successfully!'),
+              backgroundColor: AppColors.primary,
+            ),
           );
           Navigator.pop(context);
-        }
-      } catch (e) {
-        if (mounted) {
+        } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: $e')),
+            SnackBar(
+              content: Text(rideProvider.error ?? 'Failed to create ride'),
+              backgroundColor: AppColors.error,
+            ),
           );
         }
       }
@@ -159,154 +171,282 @@ class _CreateRidePageState extends State<CreateRidePage> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+       _checkLicense();
+    });
+  }
+
+  Future<void> _checkLicense() async {
+     final auth = Provider.of<AuthProvider>(context, listen: false);
+     final user = auth.currentUser;
+     
+     if (user == null) return;
+     
+     // Fetch fresh data from firestore to check status
+     // We ideally should update UserEntity to hold this status or fetch specifically
+     // For now, let's fetch doc from firestore directly for safety check
+     final doc = await FirebaseFirestore.instance.collection('users').doc(user.id).get();
+     final data = doc.data();
+     
+     if (data == null || data['licenseStatus'] != 'approved') {
+        if (!mounted) return;
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            title: const Text('License Required'),
+            content: const Text('To offer rides, you must have an approved driving license. Please upload your license for verification.'),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context); // Close dialog
+                  Navigator.pop(context); // Close CreateRidePage
+                },
+                child: const Text('Go Back'),
+              ),
+            ],
+          ),
+        );
+     }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('New Ride'),
+        title: Text('Offer a Ride', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+        elevation: 0,
+        backgroundColor: Colors.white,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(24.0),
         child: Form(
           key: _formKey,
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Ride Type Selector
-              SegmentedButton<RideType>(
-                segments: const [
-                  ButtonSegment(
-                    value: RideType.offer,
-                    label: Text('Offer Ride'),
-                    icon: Icon(Icons.directions_car),
-                  ),
-                  ButtonSegment(
-                    value: RideType.request,
-                    label: Text('Request Ride'),
-                    icon: Icon(Icons.hail),
-                  ),
-                ],
-                selected: {_rideType},
-                onSelectionChanged: (Set<RideType> newSelection) {
-                  setState(() {
-                    _rideType = newSelection.first;
-                  });
-                },
-              ),
-              const SizedBox(height: 24),
-
-              // From
-              TextFormField(
-                controller: _fromController,
-                readOnly: true,
-                onTap: () => _pickLocation(true),
-                decoration: const InputDecoration(
-                  labelText: 'From',
-                  hintText: 'Tap to pick on map',
-                  prefixIcon: Icon(Icons.my_location),
-                  border: OutlineInputBorder(),
-                  suffixIcon: Icon(Icons.map),
-                ),
-                validator: (value) =>
-                    value == null || value.isEmpty ? 'Please pick a start location' : null,
-              ),
+              _buildSectionTitle('Vehicle Details'),
               const SizedBox(height: 16),
+              _buildVehicleSelector(),
+              const SizedBox(height: 32),
               
-              // To
-              TextFormField(
-                controller: _toController,
-                readOnly: true,
-                onTap: () => _pickLocation(false),
-                decoration: const InputDecoration(
-                  labelText: 'To',
-                  hintText: 'Tap to pick on map',
-                  prefixIcon: Icon(Icons.location_on),
-                  border: OutlineInputBorder(),
-                  suffixIcon: Icon(Icons.map),
-                ),
-                validator: (value) =>
-                    value == null || value.isEmpty ? 'Please pick a destination' : null,
+              _buildSectionTitle('Route Details'),
+              const SizedBox(height: 16),
+              _buildLocationField(
+                controller: _fromController,
+                label: 'Pick-up Location',
+                icon: Icons.my_location_rounded,
+                onTap: () => _pickLocation(true),
               ),
               const SizedBox(height: 16),
-
-              // Date & Time
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => _selectDate(context),
-                      icon: const Icon(Icons.calendar_today),
-                      label: Text(
-                        "${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}",
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => _selectTime(context),
-                      icon: const Icon(Icons.access_time),
-                      label: Text(_selectedTime.format(context)),
-                    ),
-                  ),
-                ],
+              _buildLocationField(
+                controller: _toController,
+                label: 'Drop-off Location',
+                icon: Icons.location_on_rounded,
+                onTap: () => _pickLocation(false),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 32),
 
-              // Seats & Price
+              _buildSectionTitle('Schedule & Capacity'),
+              const SizedBox(height: 16),
               Row(
                 children: [
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Seats: $_seats',
-                            style: Theme.of(context).textTheme.titleMedium),
-                        Slider(
-                          value: _seats.toDouble(),
-                          min: 1,
-                          max: 6,
-                          divisions: 5,
-                          label: _seats.toString(),
-                          onChanged: (double value) {
-                            setState(() {
-                              _seats = value.toInt();
-                            });
-                          },
-                        ),
-                      ],
+                    child: _buildPickerButton(
+                      icon: Icons.calendar_today_rounded,
+                      label: "${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}",
+                      onTap: () => _selectDate(context),
                     ),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
+                    child: _buildPickerButton(
+                      icon: Icons.access_time_rounded,
+                      label: _selectedTime.format(context),
+                      onTap: () => _selectTime(context),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Available Seats: $_seats',
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                        ),
+                        const SizedBox(height: 8),
+                        SliderTheme(
+                          data: SliderTheme.of(context).copyWith(
+                            activeTrackColor: AppColors.primary,
+                            inactiveTrackColor: AppColors.primary.withOpacity(0.1),
+                            thumbColor: AppColors.primary,
+                            overlayColor: AppColors.primary.withOpacity(0.1),
+                          ),
+                          child: Slider(
+                            value: _seats.toDouble(),
+                            min: 1,
+                            max: _vehicleType == VehicleType.bike ? 1 : 6,
+                            divisions: _vehicleType == VehicleType.bike ? 1 : 5,
+                            onChanged: _vehicleType == VehicleType.bike ? null : (v) => setState(() => _seats = v.toInt()),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 24),
+                  Expanded(
                     child: TextFormField(
                       controller: _priceController,
-                      decoration: const InputDecoration(
-                        labelText: 'Price per Seat',
-                        prefixIcon: Icon(Icons.attach_money),
-                        border: OutlineInputBorder(),
-                      ),
                       keyboardType: TextInputType.number,
-                      validator: (value) {
-                        if (value == null || value.isEmpty) return 'Required';
-                        if (double.tryParse(value) == null) return 'Invalid';
-                        return null;
-                      },
+                      decoration: const InputDecoration(
+                        labelText: 'Price',
+                        prefixText: '₹ ',
+                        prefixStyle: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      validator: (v) => v!.isEmpty ? 'Required' : null,
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 32),
 
-              // Submit
-              FilledButton(
-                onPressed: _submitRide,
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+              _buildSectionTitle('Additional Notes'),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _noteController,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  hintText: 'Any specific instructions for riders...',
+                  prefixIcon: Padding(
+                    padding: EdgeInsets.only(bottom: 40),
+                    child: Icon(Icons.note_add_rounded),
+                  ),
                 ),
-                child: const Text('Post Ride', style: TextStyle(fontSize: 18)),
+              ),
+              const SizedBox(height: 48),
+
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _submitRide,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 18),
+                    backgroundColor: AppColors.primary,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    elevation: 4,
+                    shadowColor: AppColors.primary.withOpacity(0.4),
+                  ),
+                  child: const Text('Post Ride Offer', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                ),
+              ),
+              const SizedBox(height: 40),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Text(
+      title,
+      style: GoogleFonts.outfit(
+        fontSize: 18,
+        fontWeight: FontWeight.bold,
+        color: AppColors.textPrimary,
+      ),
+    );
+  }
+
+  Widget _buildVehicleSelector() {
+    return Row(
+      children: [
+        _buildVehicleOption(VehicleType.car, 'Car', Icons.directions_car_rounded),
+        const SizedBox(width: 16),
+        _buildVehicleOption(VehicleType.bike, 'Bike', Icons.directions_bike_rounded),
+      ],
+    );
+  }
+
+  Widget _buildVehicleOption(VehicleType type, String label, IconData icon) {
+    bool isSelected = _vehicleType == type;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() {
+          _vehicleType = type;
+          if (type == VehicleType.bike) _seats = 1;
+        }),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          decoration: BoxDecoration(
+            color: isSelected ? AppColors.primary : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: isSelected ? AppColors.primary : Colors.grey.shade200),
+            boxShadow: isSelected ? [BoxShadow(color: AppColors.primary.withOpacity(0.2), blurRadius: 10, offset: const Offset(0, 4))] : [],
+          ),
+          child: Column(
+            children: [
+              Icon(icon, color: isSelected ? Colors.white : Colors.grey.shade600, size: 32),
+              const SizedBox(height: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  color: isSelected ? Colors.white : Colors.grey.shade600,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLocationField({required TextEditingController controller, required String label, required IconData icon, required VoidCallback onTap}) {
+    return TextFormField(
+      controller: controller,
+      readOnly: true,
+      onTap: onTap,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: AppColors.primary),
+        suffixIcon: const Icon(Icons.map_rounded, size: 20),
+      ),
+      validator: (v) => v!.isEmpty ? 'Please pick a location' : null,
+    );
+  }
+
+  Widget _buildPickerButton({required IconData icon, required String label, required VoidCallback onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: AppColors.primary),
+            const SizedBox(width: 12),
+            Text(label, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+          ],
         ),
       ),
     );

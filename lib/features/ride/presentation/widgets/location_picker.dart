@@ -39,20 +39,21 @@ class _LocationPickerState extends State<LocationPicker> {
   String _errorMessage = "";
 
   Future<void> _checkLocation() async {
-    final pos = await _locationService.getCurrentLocation();
-    if (pos != null) {
-      if (mounted) {
+    final error = await _locationService.checkAndRequestPermission();
+    if (error == null) {
+      final pos = await _locationService.getCurrentLocation();
+      if (pos != null && mounted) {
         setState(() {
           _currentCenter = LatLng(pos.latitude, pos.longitude);
           _mapController.move(_currentCenter, 15);
+          _errorMessage = "";
         });
         _getAddressFromLatLng(_currentCenter);
       }
     } else {
       if (mounted) {
         setState(() {
-          _errorMessage = "Could not get current location.";
-          _getAddressFromLatLng(_currentCenter); // Resolve default
+          _errorMessage = error;
         });
       }
     }
@@ -82,6 +83,29 @@ class _LocationPickerState extends State<LocationPicker> {
 
   void _onMapIdle() {
      _getAddressFromLatLng(_currentCenter);
+  }
+
+  final TextEditingController _searchController = TextEditingController();
+
+  Future<void> _searchAddress(String value) async {
+    if (value.isEmpty) return;
+    
+    setState(() => _isLoadingPayload = true);
+    final coords = await _locationService.getCoordinatesFromAddress(value);
+    
+    if (mounted) {
+      if (coords != null) {
+        final newPos = LatLng(coords[0], coords[1]);
+        _mapController.move(newPos, 15);
+        _currentCenter = newPos;
+        _getAddressFromLatLng(newPos);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Location not found. Please try again.')),
+        );
+        setState(() => _isLoadingPayload = false);
+      }
+    }
   }
 
   @override
@@ -120,9 +144,39 @@ class _LocationPickerState extends State<LocationPicker> {
               ),
             ],
           ),
+          // Search Bar
+          Positioned(
+            top: 20,
+            left: 20,
+            right: 20,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10)],
+              ),
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: 'Search for place...',
+                  border: InputBorder.none,
+                  icon: const Icon(Icons.search),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.clear),
+                    onPressed: () => _searchController.clear(),
+                  ),
+                ),
+                onSubmitted: _searchAddress,
+              ),
+            ),
+          ),
           // Center Marker
           const Center(
-            child: Icon(Icons.location_pin, size: 48, color: Colors.red),
+            child: Padding(
+              padding: EdgeInsets.only(bottom: 40), // Offset for pin point
+              child: Icon(Icons.location_on_rounded, size: 50, color: Colors.red),
+            ),
           ),
           // Address Card
           Positioned(
@@ -130,6 +184,8 @@ class _LocationPickerState extends State<LocationPicker> {
             left: 20,
             right: 20,
             child: Card(
+              elevation: 4,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -138,18 +194,22 @@ class _LocationPickerState extends State<LocationPicker> {
                     if (_errorMessage.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 8.0),
-                        child: Text(_errorMessage, style: const TextStyle(color: Colors.red)),
+                        child: Text(_errorMessage, style: const TextStyle(color: Colors.red, fontSize: 12)),
                       ),
                     Row(
                       children: [
-                        const Icon(Icons.location_on, color: Colors.blue),
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(color: Colors.blue.withOpacity(0.1), shape: BoxShape.circle),
+                          child: const Icon(Icons.location_on, color: Colors.blue, size: 20),
+                        ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: _isLoadingPayload
                               ? const LinearProgressIndicator()
                               : Text(
                                   _address,
-                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -163,9 +223,11 @@ class _LocationPickerState extends State<LocationPicker> {
           ),
           Positioned(
              right: 20,
-             bottom: 100,
+             bottom: 120,
              child: FloatingActionButton(
                 heroTag: "my_location",
+                backgroundColor: Colors.white,
+                foregroundColor: Colors.blue,
                 onPressed: _checkLocation,
                 child: const Icon(Icons.my_location),
              ),

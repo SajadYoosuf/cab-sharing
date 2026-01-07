@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:ride_share_app/core/errors/failures.dart';
 import '../../domain/entities/ride_entity.dart';
 import '../../domain/repositories/ride_repository.dart';
 
@@ -30,27 +31,38 @@ class FirebaseRideRepository implements RideRepository {
         'seats': ride.seats,
         'price': ride.price,
         'status': ride.status.toString().split('.').last,
+        'vehicleType': ride.vehicleType.toString().split('.').last,
+        'note': ride.note,
         'createdAt': FieldValue.serverTimestamp(),
       };
 
       await _firestore.collection('rides').add(rideData);
+    } on FirebaseException catch (e) {
+      throw FirestoreFailure('Database error: ${e.message}');
     } catch (e) {
-      throw Exception('Failed to create ride: $e');
+      throw FirestoreFailure('Failed to create ride. Please try again.');
     }
   }
 
   @override
   Future<List<RideEntity>> getAvailableRides() async {
     try {
+      // Fetch open rides. Sorting in Dart to avoid manifest/index requirement errors
       final snapshot = await _firestore
           .collection('rides')
-          .where('status', isEqualTo: 'open')
-          .orderBy('dateTime', descending: false)
+          .where('status', whereIn: ['open', 'booked', 'ongoing']) // Include ongoing if needed
           .get();
 
-      return snapshot.docs.map((doc) => _mapDocToEntity(doc)).toList();
+      final rides = snapshot.docs.map((doc) => _mapDocToEntity(doc)).toList();
+      
+      // Sort by dateTime ascending
+      rides.sort((a, b) => a.dateTime.compareTo(b.dateTime));
+      
+      return rides;
+    } on FirebaseException catch (e) {
+      throw FirestoreFailure('Database error: ${e.message}');
     } catch (e) {
-      throw Exception('Failed to fetch rides: $e');
+      throw FirestoreFailure('Failed to fetch rides. Please try again.');
     }
   }
 
@@ -60,12 +72,18 @@ class FirebaseRideRepository implements RideRepository {
       final snapshot = await _firestore
           .collection('rides')
           .where('hostId', isEqualTo: userId)
-          .orderBy('dateTime', descending: true)
           .get();
 
-      return snapshot.docs.map((doc) => _mapDocToEntity(doc)).toList();
+      final rides = snapshot.docs.map((doc) => _mapDocToEntity(doc)).toList();
+      
+      // Sort by dateTime descending
+      rides.sort((a, b) => b.dateTime.compareTo(a.dateTime));
+      
+      return rides;
+    } on FirebaseException catch (e) {
+      throw FirestoreFailure('Database error: ${e.message}');
     } catch (e) {
-      throw Exception('Failed to fetch user rides: $e');
+      throw FirestoreFailure('Failed to fetch your rides.');
     }
   }
 
@@ -76,11 +94,68 @@ class FirebaseRideRepository implements RideRepository {
         'status': status.toString().split('.').last,
       });
     } catch (e) {
-      throw Exception('Failed to update ride status: $e');
+      throw FirestoreFailure('Failed to update ride status');
     }
   }
 
-  RideEntity _mapDocToEntity(QueryDocumentSnapshot doc) {
+  @override
+  Future<void> updateHostLocation(String rideId, double lat, double lng) async {
+    try {
+      await _firestore.collection('rides').doc(rideId).update({
+        'hostLatitude': lat,
+        'hostLongitude': lng,
+      });
+    } catch (e) {
+      throw FirestoreFailure('Failed to update host location');
+    }
+  }
+
+  @override
+  Future<void> decrementSeats(String rideId) async {
+    try {
+      await _firestore.runTransaction((transaction) async {
+        final docRef = _firestore.collection('rides').doc(rideId);
+        final snapshot = await transaction.get(docRef);
+        
+        if (!snapshot.exists) {
+          throw FirestoreFailure('Ride not found');
+        }
+
+        final data = snapshot.data() as Map<String, dynamic>;
+        int currentSeats = data['seats'] ?? 0;
+        
+        if (currentSeats > 0) {
+          currentSeats--;
+          final updates = <String, dynamic>{'seats': currentSeats};
+          
+          if (currentSeats == 0) {
+            updates['status'] = 'booked';
+          }
+          
+          transaction.update(docRef, updates);
+        } else {
+          throw FirestoreFailure('No seats available');
+        }
+      });
+    } catch (e) {
+      if (e is FirestoreFailure) rethrow;
+      throw FirestoreFailure('Failed to update seats: $e');
+    }
+  }
+
+  @override
+  Future<RideEntity?> getRideById(String rideId) async {
+    try {
+      final doc = await _firestore.collection('rides').doc(rideId).get();
+      if (!doc.exists) return null;
+      return _mapDocToEntity(doc);
+    } catch (e) {
+      throw FirestoreFailure('Failed to fetch ride details');
+    }
+  }
+
+
+  RideEntity _mapDocToEntity(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     
     return RideEntity(
@@ -94,6 +169,17 @@ class FirebaseRideRepository implements RideRepository {
       seats: data['seats'] ?? 1,
       price: (data['price'] ?? 0).toDouble(),
       status: _parseRideStatus(data['status']),
+      vehicleType: _parseVehicleType(data['vehicleType']),
+      note: data['note'] ?? '',
+      hostLatitude: (data['hostLatitude'] as num?)?.toDouble(),
+      hostLongitude: (data['hostLongitude'] as num?)?.toDouble(),
+    );
+  }
+
+  VehicleType _parseVehicleType(String? typeStr) {
+    return VehicleType.values.firstWhere(
+      (e) => e.toString().split('.').last == typeStr,
+      orElse: () => VehicleType.car,
     );
   }
 

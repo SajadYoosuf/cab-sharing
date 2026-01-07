@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:ride_share_app/core/constants/app_colors.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import '../../domain/entities/ride_entity.dart';
-import '../../../chat/presentation/pages/chat_page.dart';
-import '../widgets/sos_button.dart';
-import '../../../../core/services/location_service.dart';
+import 'package:ride_share_app/features/ride/domain/entities/ride_entity.dart';
+import 'package:ride_share_app/features/chat/presentation/pages/chat_page.dart';
+import 'package:ride_share_app/core/services/location_service.dart';
+import 'package:provider/provider.dart';
+import 'package:ride_share_app/features/auth/presentation/providers/auth_provider.dart';
+import 'package:ride_share_app/features/ride/presentation/providers/ride_request_provider.dart';
+import 'package:ride_share_app/features/ride/domain/entities/ride_request_entity.dart';
+import 'package:ride_share_app/features/ride/presentation/providers/ride_provider.dart';
 
 class RideDetailPage extends StatefulWidget {
   final RideEntity ride;
@@ -19,23 +25,80 @@ class _RideDetailPageState extends State<RideDetailPage> {
   final MapController _mapController = MapController();
   final LocationService _locationService = LocationService();
   LatLng? _currentPosition;
-  bool _isTracking = false;
+  RideRequestStatus? _requestStatus;
+  bool _isLoadingStatus = true;
+  bool _isHost = false;
 
   @override
   void initState() {
     super.initState();
+    final user = Provider.of<AuthProvider>(context, listen: false).currentUser;
+    _isHost = user?.id == widget.ride.hostId;
     _startTracking();
+    if (!_isHost) _checkRequestStatus();
+    else setState(() => _isLoadingStatus = false);
+  }
+
+  Future<void> _checkRequestStatus() async {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final requestProvider = Provider.of<RideRequestProvider>(context, listen: false);
+    if (auth.currentUser != null) {
+      final status = await requestProvider.getRequestStatus(widget.ride.id, auth.currentUser!.id);
+      if (mounted) {
+        setState(() {
+          _requestStatus = status;
+          _isLoadingStatus = false;
+        });
+      }
+    } else {
+      if (mounted) setState(() => _isLoadingStatus = false);
+    }
   }
 
   void _startTracking() {
     _locationService.getPositionStream().listen((pos) {
       if (mounted) {
         setState(() {
-          _isTracking = true;
           _currentPosition = LatLng(pos.latitude, pos.longitude);
         });
+        
+        // If host, update location in Firestore
+        if (_isHost) {
+          Provider.of<RideProvider>(context, listen: false)
+              .updateHostLocation(widget.ride.id, pos.latitude, pos.longitude);
+        }
       }
     });
+  }
+
+  Future<void> _sendRideRequest() async {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final requestProvider = Provider.of<RideRequestProvider>(context, listen: false);
+    
+    if (auth.currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please login to request a ride")));
+      return;
+    }
+
+    final request = RideRequestEntity(
+      id: '',
+      rideId: widget.ride.id,
+      passengerId: auth.currentUser!.id,
+      passengerName: auth.currentUser!.name,
+      hostId: widget.ride.hostId,
+      status: RideRequestStatus.pending,
+      createdAt: DateTime.now(),
+    );
+
+    final success = await requestProvider.sendRequest(request);
+    if (mounted) {
+      if (success) {
+        setState(() => _requestStatus = RideRequestStatus.pending);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Request sent successfully!")));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Failed to send request or already requested.")));
+      }
+    }
   }
 
   void _triggerSOS() {
@@ -60,23 +123,42 @@ class _RideDetailPageState extends State<RideDetailPage> {
     final end = LatLng(widget.ride.to.latitude, widget.ride.to.longitude);
 
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: const Text('Ride Details'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.chat),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ChatPage(
-                    rideId: widget.ride.id,
-                    title: 'Chat with ${widget.ride.hostName}',
-                  ),
-                ),
-              );
-            },
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: CircleAvatar(
+            backgroundColor: Colors.white,
+            child: IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: AppColors.textPrimary),
+              onPressed: () => Navigator.pop(context),
+            ),
           ),
+        ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: CircleAvatar(
+              backgroundColor: Colors.white,
+              child: IconButton(
+                icon: const Icon(Icons.chat_bubble_outline_rounded, size: 20, color: AppColors.primary),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ChatPage(
+                        rideId: widget.ride.id,
+                        title: 'Chat with ${widget.ride.hostName}',
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
         ],
       ),
       body: Stack(
@@ -85,99 +167,375 @@ class _RideDetailPageState extends State<RideDetailPage> {
             mapController: _mapController,
             options: MapOptions(
               initialCenter: start,
-              initialZoom: 12.0,
+              initialZoom: 13.0,
             ),
             children: [
               TileLayer(
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                 userAgentPackageName: 'com.example.ride_share_app',
               ),
+              PolylineLayer(
+                polylines: [
+                  Polyline(
+                    points: [start, end],
+                    strokeWidth: 5.0,
+                    color: AppColors.primary.withOpacity(0.6),
+                    gradientColors: [AppColors.primary, AppColors.secondary],
+                  ),
+                ],
+              ),
               MarkerLayer(
                 markers: [
                   Marker(
                     point: start,
-                    width: 40,
-                    height: 40,
-                    child: const Icon(Icons.location_on, color: Colors.green, size: 40),
+                    width: 60,
+                    height: 60,
+                    child: Column(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4)]),
+                          child: const Icon(Icons.my_location_rounded, color: AppColors.primary, size: 24),
+                        ),
+                      ],
+                    ),
                   ),
                   Marker(
                     point: end,
-                    width: 40,
-                    height: 40,
-                    child: const Icon(Icons.location_on, color: Colors.blue, size: 40),
+                    width: 60,
+                    height: 60,
+                    child: Column(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4)]),
+                          child: const Icon(Icons.location_on_rounded, color: AppColors.secondary, size: 24),
+                        ),
+                      ],
+                    ),
                   ),
+                  if (widget.ride.hostLatitude != null && widget.ride.hostLongitude != null)
+                    Marker(
+                      point: LatLng(widget.ride.hostLatitude!, widget.ride.hostLongitude!),
+                      width: 50,
+                      height: 50,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withOpacity(0.2),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.orange, width: 2),
+                        ),
+                        child: const Center(
+                          child: Icon(Icons.directions_car_filled_rounded, color: Colors.orange, size: 20),
+                        ),
+                      ),
+                    ),
                   if (_currentPosition != null)
                     Marker(
                       point: _currentPosition!,
                       width: 40,
                       height: 40,
-                      child: const Icon(Icons.navigation, color: Colors.red, size: 40),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withOpacity(0.2),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: AppColors.primary, width: 2),
+                        ),
+                        child: const Center(
+                          child: Icon(Icons.person_pin_circle_rounded, color: AppColors.primary, size: 20),
+                        ),
+                      ),
                     ),
-                ],
-              ),
-              PolylineLayer(
-                polylines: [
-                  Polyline(
-                    points: [start, end],
-                    strokeWidth: 4.0,
-                    color: Colors.blueAccent,
-                  ),
                 ],
               ),
             ],
           ),
-          Positioned(
-            bottom: 30,
-            left: 20,
-            child: SOSButton(onPressed: _triggerSOS),
-          ),
-          Positioned(
-            bottom: 30,
-            right: 20,
-            child: FloatingActionButton(
-              heroTag: 'center_map',
-              onPressed: () {
-                if (_currentPosition != null) {
-                  _mapController.move(_currentPosition!, 15);
-                } else {
-                  _mapController.move(start, 15);
-                }
-              },
-              child: const Icon(Icons.my_location),
-            ),
-          ),
-          Positioned(
-            top: 10,
-            left: 10,
-            right: 10,
-            child: Card(
-              color: Colors.white.withValues(alpha: 0.9),
-              child: Padding(
-                padding: const EdgeInsets.all(12.0),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text("From: ${widget.ride.from.name}"),
-                    const Divider(),
-                    Text("To: ${widget.ride.to.name}"),
-                    const SizedBox(height: 4),
-                    Text("Host: ${widget.ride.hostName}"),
-                    const SizedBox(height: 4),
-                    if (_isTracking)
-                      const Row(
-                         children: [
-                           Icon(Icons.gps_fixed, size: 16, color: Colors.green),
-                           SizedBox(width: 4),
-                           Text("Live Tracking Active", style: TextStyle(color: Colors.green, fontSize: 12)),
-                         ],
-                      ),
+          
+          DraggableScrollableSheet(
+            initialChildSize: 0.45,
+            minChildSize: 0.35,
+            maxChildSize: 0.9,
+            builder: (context, scrollController) {
+              return Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(40)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      blurRadius: 30,
+                      offset: const Offset(0, -10),
+                    ),
                   ],
                 ),
-              ),
+                child: ListView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 50,
+                        height: 5,
+                        margin: const EdgeInsets.only(bottom: 24),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade200,
+                          borderRadius: BorderRadius.circular(2.5),
+                        ),
+                      ),
+                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${widget.ride.hostName}\'s Trip',
+                                style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                                    child: Text(
+                                      widget.ride.vehicleType.name.toUpperCase(),
+                                      style: const TextStyle(color: AppColors.primary, fontSize: 10, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    '${widget.ride.seats} Seats Available',
+                                    style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.w600, fontSize: 13),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        Text(
+                          '₹${widget.ride.price.toStringAsFixed(0)}',
+                          style: GoogleFonts.outfit(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 32),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 32),
+                    Text('Route Information', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 16),
+                    _buildRouteInfo(),
+                    const SizedBox(height: 32),
+                    Text('Host Profile', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 16),
+                    _buildHostInfo(),
+                    if (widget.ride.note.isNotEmpty) ...[
+                      const SizedBox(height: 32),
+                      Text('Trip Notes', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 12),
+                      _buildNoteSection(),
+                    ],
+                    const SizedBox(height: 40),
+                    if (_isHost)
+                      Column(
+                        children: [
+                          if (widget.ride.status == RideStatus.open || widget.ride.status == RideStatus.booked)
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                onPressed: () => Provider.of<RideProvider>(context, listen: false).updateRideStatus(widget.ride.id, RideStatus.ongoing),
+                                style: ElevatedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 20),
+                                  backgroundColor: Colors.blue,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                ),
+                                child: const Text('Start Trip', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                              ),
+                            ),
+                          if (widget.ride.status == RideStatus.ongoing)
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                onPressed: () => Provider.of<RideProvider>(context, listen: false).updateRideStatus(widget.ride.id, RideStatus.completed),
+                                style: ElevatedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 20),
+                                  backgroundColor: Colors.green,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                ),
+                                child: const Text('Complete Trip', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                              ),
+                            ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatPage(rideId: widget.ride.id, title: 'Trip Group Chat'))),
+                                  icon: const Icon(Icons.group_rounded),
+                                  label: const Text('Group Chat'),
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(vertical: 16),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      )
+                    else
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _isLoadingStatus 
+                              ? const Center(child: CircularProgressIndicator())
+                              : ElevatedButton(
+                                onPressed: _requestStatus == null ? _sendRideRequest : null,
+                                style: ElevatedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 20),
+                                  backgroundColor: _getStatusColor(_requestStatus),
+                                  elevation: 8,
+                                  shadowColor: _getStatusColor(_requestStatus).withOpacity(0.4),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                ),
+                                child: Text(
+                                  _getRequestButtonText(), 
+                                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)
+                                ),
+                              ),
+                          ),
+                          const SizedBox(width: 16),
+                          _buildSafeSOSButton(),
+                        ],
+                      ),
+                    const SizedBox(height: 30),
+                  ],
+                ),
+              );
+            },
+          ),
+          
+          Positioned(
+            top: MediaQuery.of(context).size.height * 0.4,
+            right: 20,
+            child: FloatingActionButton(
+              mini: true,
+              backgroundColor: Colors.white,
+              onPressed: () {
+                _mapController.move(_currentPosition ?? start, 15);
+              },
+              child: const Icon(Icons.my_location_rounded, color: AppColors.primary),
             ),
-          )
+          ),
         ],
       ),
+    );
+  }
+
+  Color _getStatusColor(RideRequestStatus? status) {
+    if (status == null) return AppColors.primary;
+    switch (status) {
+      case RideRequestStatus.pending: return Colors.orange;
+      case RideRequestStatus.accepted: return Colors.green;
+      case RideRequestStatus.rejected: return Colors.red;
+      case RideRequestStatus.cancelled: return Colors.grey;
+    }
+  }
+
+  String _getRequestButtonText() {
+    if (_requestStatus == null) return 'Request to Join';
+    switch (_requestStatus!) {
+      case RideRequestStatus.pending: return 'Request Pending';
+      case RideRequestStatus.accepted: return 'Accepted';
+      case RideRequestStatus.rejected: return 'Rejected';
+      case RideRequestStatus.cancelled: return 'Cancelled';
+    }
+  }
+
+  Widget _buildSafeSOSButton() {
+     return Container(
+      decoration: BoxDecoration(
+        color: AppColors.error.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: IconButton(
+        icon: const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 28),
+        onPressed: _triggerSOS,
+        padding: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
+  Widget _buildRouteInfo() {
+    return Row(
+      children: [
+        Column(
+          children: [
+            const Icon(Icons.circle_outlined, size: 16, color: AppColors.primary),
+            Container(width: 2, height: 40, color: Colors.grey.shade200),
+            const Icon(Icons.location_on_rounded, size: 16, color: AppColors.secondary),
+          ],
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(widget.ride.from.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              const SizedBox(height: 36),
+              Text(widget.ride.to.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHostInfo() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 24,
+            backgroundColor: AppColors.primary.withOpacity(0.1),
+            child: Text(widget.ride.hostName[0], style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(widget.ride.hostName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                const Text('Verified Host • 4.8 ★', style: TextStyle(fontSize: 12, color: Colors.grey)),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.phone_in_talk_rounded, color: AppColors.primary),
+            onPressed: () {},
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoteSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Note from Host', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+        const SizedBox(height: 8),
+        Text(
+          widget.ride.note,
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+        ),
+      ],
     );
   }
 }

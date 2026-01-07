@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:ride_share_app/core/errors/failures.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/repositories/chat_repository.dart';
 
@@ -33,15 +34,21 @@ class FirebaseChatRepository implements ChatRepository {
 
   @override
   Future<void> sendMessage(String rideId, String senderId, String senderName, String text) async {
-    await _firestore
-        .collection('rides')
-        .doc(rideId)
-        .collection('messages')
-        .add({
-      'senderId': senderId,
-      'senderName': senderName,
-      'text': text,
-      'timestamp': FieldValue.serverTimestamp(),
-    });
+    try {
+      await _firestore
+          .collection('rides')
+          .doc(rideId)
+          .collection('messages')
+          .add({
+        'senderId': senderId,
+        'senderName': senderName,
+        'text': text,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+    } on FirebaseException catch (e) {
+      throw FirestoreFailure('Database error: ${e.message}');
+    } catch (e) {
+      throw FirestoreFailure('Failed to send message.');
+    }
   }
 }
