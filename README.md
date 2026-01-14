@@ -37,11 +37,25 @@ EcoRide is a premium, state-of-the-art cab-sharing application built with Flutte
 *   **Ride Feedback Log**: Complete oversight of user reviews with links to specific profiles.
 *   **Global Announcements**: Ability to broadcast notifications to the entire user base.
 
-## 🛠️ Technology Stack
+## 🏗 Architecture
+
+The project follows a **Layer-based Architecture** to ensure simplicity, maintainability, and a beginner-friendly codebase.
+
+### Layer Structure:
+- **📂 lib/screens**: All UI pages and screens.
+- **📂 lib/providers**: State management and business logic (using Provider).
+- **📂 lib/models**: Concise data models for the application.
+- **📂 lib/data**: Data sources and repository implementations.
+- **📂 lib/services**: External services and HTTP/Network calling logic.
+- **📂 lib/core**: Global constants, themes, and shared utilities.
+- **� lib/widgets**: Reusable UI components.
+
+## �🛠️ Technology Stack
 *   **Frontend**: Flutter (State management via `Provider`)
 *   **Backend**: Firebase (Auth, Firestore, Storage)
 *   **Design**: Custom Vanilla CSS inspired UI with Glassmorphism and Modern Typography (Outfit).
 *   **Analytics**: FL Chart for environmental impact visualization.
+*   **Maps**: Flutter Map & OpenStreetMap integration.
 
 ## 📦 Getting Started
 
