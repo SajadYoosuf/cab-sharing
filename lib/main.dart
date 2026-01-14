@@ -1,31 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'core/theme/app_theme.dart';
-import 'features/auth/data/repositories/firebase_auth_repository.dart';
-import 'features/auth/presentation/providers/auth_provider.dart';
-import 'features/auth/presentation/pages/splash_page.dart';
-import 'features/auth/presentation/pages/login_page.dart';
-import 'features/auth/presentation/pages/register_page.dart';
-import 'features/ride/data/repositories/firebase_ride_repository.dart';
-import 'features/ride/presentation/providers/ride_provider.dart';
-import 'features/home/presentation/pages/main_navigation_page.dart';
+import 'package:ride_share_app/core/theme/app_theme.dart';
+import 'data/firebase_auth_repository.dart';
+import 'providers/auth_provider.dart';
+import 'screens/splash_page.dart';
+import 'screens/login_page.dart';
+import 'screens/register_page.dart';
+import 'data/firebase_ride_repository.dart';
+import 'providers/ride_provider.dart';
+import 'screens/main_navigation_page.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 
-import 'features/ride/presentation/pages/create_ride_page.dart';
-import 'features/ride/presentation/pages/find_ride_page.dart';
-import 'features/chat/data/repositories/firebase_chat_repository.dart';
-import 'package:ride_share_app/features/chat/domain/repositories/chat_repository.dart';
-import 'package:ride_share_app/features/ride/domain/repositories/ride_repository.dart';
-import 'package:ride_share_app/features/ride/domain/repositories/ride_request_repository.dart';
-import 'package:ride_share_app/features/auth/presentation/providers/verification_provider.dart';
-import 'package:ride_share_app/features/auth/presentation/pages/phone_verification_page.dart';
-import 'features/chat/presentation/providers/chat_provider.dart';
-import 'features/admin/presentation/pages/admin_dashboard_page.dart';
-import 'features/ride/data/repositories/firebase_ride_request_repository.dart';
-import 'features/ride/presentation/providers/ride_request_provider.dart';
+import 'screens/create_ride_page.dart';
+import 'screens/find_ride_page.dart';
+import 'data/firebase_chat_repository.dart';
+import 'package:ride_share_app/data/chat_repository.dart';
+import 'package:ride_share_app/data/ride_repository.dart';
+import 'package:ride_share_app/data/ride_request_repository.dart';
+import 'package:ride_share_app/providers/verification_provider.dart';
+import 'package:ride_share_app/screens/phone_verification_page.dart';
+import 'providers/chat_provider.dart';
+import 'screens/admin_dashboard_page.dart';
+import 'data/firebase_ride_request_repository.dart';
+import 'providers/ride_request_provider.dart';
 
-import 'features/ride/presentation/providers/feedback_provider.dart';
+import 'providers/feedback_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
