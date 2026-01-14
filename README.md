@@ -83,7 +83,7 @@ The project follows a **Layer-based Architecture** to ensure simplicity, maintai
 ---
 *Built with ❤️ for a Greener Planet.*
 
-## 🧠 Core Logic & Architecture
+## 🧠 Core Business Logic
 
 ### 1. User Verification Logic (The "Security Gate")
 This distinguishes between a guest, a verified passenger, and a verified driver.
