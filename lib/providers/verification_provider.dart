@@ -223,6 +223,37 @@ class VerificationProvider extends ChangeNotifier {
     return base64Encode(imageBytes);
   }
 
+  Future<bool> updateLicense(File image) async {
+    _setLoading(true);
+    try {
+      final user = _auth.currentUser;
+      if (user == null) throw Exception('No user logged in');
+
+      String licenseBase64 = await _fileToBase64(image);
+
+      await _firestore.collection('users').doc(user.uid).update({
+        'licenseBase64': licenseBase64,
+        'licenseStatus': 'pending',
+        'licenseUrl': null, // Clear URL if we are using base64 now
+        'verificationStatus': 'pending', // Re-trigger overall verification pending if needed, or keep as is? 
+                                         // Usually if license is added, they want it verified.
+                                         // But let's keep it specific to licenseStatus for now, 
+                                         // though admin usually looks at overall 'verificationStatus'.
+                                         // Let's set overall to pending so it shows up in admin list.
+        'verificationStatus': 'pending',
+      });
+
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = e.toString();
+      print('Update License Error: $e');
+      return false;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
   void _setLoading(bool val) {
     _isLoading = val;
     notifyListeners();

@@ -13,6 +13,10 @@ import 'ride_history_page.dart';
 import 'about_page.dart';
 import 'vehicle_settings_page.dart';
 
+import 'package:ride_share_app/providers/verification_provider.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
+
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
 
@@ -68,7 +72,7 @@ class ProfilePage extends StatelessWidget {
                   }),
                 ]),
                 const SizedBox(height: 32),
-                _buildDocumentsSection(currentUser),
+                _buildDocumentsSection(context, currentUser),
                 const SizedBox(height: 40),
                 SizedBox(
                   width: double.infinity,
@@ -170,7 +174,7 @@ class ProfilePage extends StatelessWidget {
     );
   }
 
-  Widget _buildDocumentsSection(UserModel user) {
+  Widget _buildDocumentsSection(BuildContext context, UserModel user) {
     bool hasIdentity = user.identityDocBase64 != null || user.identityDocUrl != null;
     bool hasLicense = user.licenseBase64 != null || user.licenseUrl != null;
     
@@ -193,15 +197,119 @@ class ProfilePage extends StatelessWidget {
             children: [
               if (hasIdentity)
                 _buildDocTile('Identity Document', user.identityDocBase64 ?? user.identityDocUrl!),
-              if (hasIdentity && hasLicense)
+              if (hasIdentity)
                 const Divider(height: 32),
+              
               if (hasLicense)
-                _buildDocTile('Driving License', user.licenseBase64 ?? user.licenseUrl!),
+                _buildDocTile('Driving License', user.licenseBase64 ?? user.licenseUrl!)
+              else ...[
+                 _buildUploadLicenseTile(context, user),
+              ],
             ],
           ),
         ),
       ],
     );
+  }
+
+  Widget _buildUploadLicenseTile(BuildContext context, UserModel user) {
+     String message = 'Upload Driving License';
+     Color color = AppColors.primary;
+     IconData icon = Icons.upload_file_rounded;
+     bool isPending = user.licenseBase64 != null && (user.verificationStatus == 'pending' || (user as dynamic).toMap()['licenseStatus'] == 'pending');
+
+     // Check precise license status if possible, otherwise rely on presence + verificationStatus
+     // The VerificationProvider update sets licenseStatus to pending.
+     // Let's assume if base64 is present but we are here, it might be pending or rejected?
+     // Actually if hasLicense is true, we show _buildDocTile.
+     // So we are here only if hasLicense is false.
+     // BUT wait, hasLicense checks if base64/url is not null.
+     // If user was rejected, the base64 might still be there but status is rejected?
+     // Use case: User skipped -> hasLicense = false. Show Upload.
+     // Use case: User uploaded -> hasLicense = true. Show DocTile.
+     
+     // What if rejected? Admin might reject and set status to rejected. Use usually keeps the doc?
+     // If rejected, we want to allow re-upload.
+     // The current _buildDocumentsSection logic says: if (hasLicense) _buildDocTile...
+     // So if rejected and doc exists, it shows DocTile. We need to change that to show "Rejected - Upload Again".
+
+     return InkWell(
+        onTap: () => _showLicenseUploadDialog(context),
+        child: Row(
+          children: [
+             Container(
+               width: 60, height: 40,
+               decoration: BoxDecoration(
+                 color: AppColors.primary.withOpacity(0.1),
+                 borderRadius: BorderRadius.circular(8),
+               ),
+               child: Icon(Icons.add_a_photo_rounded, color: AppColors.primary),
+             ),
+             const SizedBox(width: 16),
+             Expanded(
+               child: Column(
+                 crossAxisAlignment: CrossAxisAlignment.start,
+                 children: [
+                   Text('Add Driving License', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                   Text('Required for offering rides', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                 ],
+               ),
+             ),
+             Container(
+               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+               decoration: BoxDecoration(
+                 color: AppColors.primary,
+                 borderRadius: BorderRadius.circular(20),
+               ),
+               child: const Text('Upload', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+             ),
+          ],
+        ),
+     );
+  }
+
+  void _showLicenseUploadDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Upload Driving License'),
+        content: const Text('Please upload a clear picture of your driving license to be verified as a host.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _pickAndUploadLicense(context);
+            },
+            child: const Text('Pick Image'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickAndUploadLicense(BuildContext context) async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery, maxWidth: 800, imageQuality: 70);
+    
+    if (pickedFile != null) {
+       final provider = Provider.of<VerificationProvider>(context, listen: false);
+       
+       // Show loading
+       if (!context.mounted) return;
+       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Uploading license...')));
+       
+       bool success = await provider.updateLicense(File(pickedFile.path));
+       
+       if (context.mounted) {
+         ScaffoldMessenger.of(context).hideCurrentSnackBar();
+         if (success) {
+           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('License uploaded for verification!'), backgroundColor: Colors.green));
+         } else {
+           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to upload license'), backgroundColor: Colors.red));
+         }
+       }
+    }
   }
 
   Widget _buildDocTile(String label, String source) {
