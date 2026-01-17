@@ -560,10 +560,7 @@ class _RideDetailPageState extends State<RideDetailPage> {
               ],
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.phone_in_talk_rounded, color: AppColors.primary),
-            onPressed: () {},
-          ),
+
         ],
       ),
     );

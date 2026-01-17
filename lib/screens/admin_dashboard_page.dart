@@ -109,14 +109,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
              Colors.orange,
              onTap: _showChangePasswordDialog,
           ),
-          _buildActionItem(
-            'Database Maintenance', 
-            Icons.storage_rounded, 
-            Colors.purple,
-            onTap: () {
-               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Maintenance mode is currently disabled.')));
-            },
-          ),
+
           const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
@@ -226,7 +219,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
              Colors.purple,
              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminAnnouncementPage())),
           ),
-          _buildActionItem('App Configuration', Icons.settings_suggest_rounded, Colors.grey),
+
           _buildActionItem('System Security', Icons.security_rounded, Colors.teal),
           _buildActionItem(
              'Verify Users', 

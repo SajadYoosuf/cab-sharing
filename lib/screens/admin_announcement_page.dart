@@ -75,7 +75,7 @@ class _AdminAnnouncementPageState extends State<AdminAnnouncementPage> {
             _buildLabel('Title'),
             TextField(
               controller: _titleController,
-              decoration: _inputDecoration('e.g., System Maintenance'),
+              decoration: _inputDecoration('e.g., Critical Update'),
             ),
             const SizedBox(height: 24),
 
