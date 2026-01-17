@@ -54,9 +54,18 @@ class _RideDetailPageState extends State<RideDetailPage> {
      final feedbackProvider = Provider.of<FeedbackProvider>(context, listen: false);
      if (auth.currentUser != null) {
         final submitted = await feedbackProvider.hasSubmittedFeedback(widget.ride.id, auth.currentUser!.id);
-        if (mounted) setState(() => _hasSubmittedFeedback = submitted);
+        if (mounted) {
+          setState(() => _hasSubmittedFeedback = submitted);
+          if (!submitted && !_isHost && _requestStatus == RideRequestStatus.accepted) {
+             // Auto show dialog after a small delay
+             Future.delayed(const Duration(milliseconds: 500), () {
+               if (mounted) _showFeedbackDialog();
+             });
+          }
+        }
      }
   }
+  
 
   Future<void> _checkRequestStatus() async {
     final auth = Provider.of<AuthProvider>(context, listen: false);
@@ -374,6 +383,7 @@ class _RideDetailPageState extends State<RideDetailPage> {
                       const SizedBox(height: 32),
                       _buildFeedbackSection(),
                     ],
+                    _buildPassengerList(),
                     const SizedBox(height: 40),
                     if (_isHost)
                       Column(
@@ -606,6 +616,51 @@ class _RideDetailPageState extends State<RideDetailPage> {
             ),
         ],
       ),
+    );
+  }
+
+  Widget _buildPassengerList() {
+    // Show only if Host or if user is an accepted passenger (which they are if they can see this page and it's booked/ongoing)
+    // Actually, let's show to everyone who can view details.
+    
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: Provider.of<RideProvider>(context, listen: false).getAcceptedPassengers(widget.ride.id),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+           return const SizedBox.shrink(); 
+        }
+
+        final passengers = snapshot.data!;
+        
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+             const SizedBox(height: 32),
+             Text('Confirmed Passengers (${passengers.length})', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold)),
+             const SizedBox(height: 16),
+             ...passengers.map((p) => Container(
+               margin: const EdgeInsets.only(bottom: 12),
+               padding: const EdgeInsets.all(12),
+               decoration: BoxDecoration(
+                 color: Colors.white,
+                 borderRadius: BorderRadius.circular(16),
+                 border: Border.all(color: Colors.grey.shade200),
+               ),
+               child: Row(
+                 children: [
+                   CircleAvatar(
+                     backgroundColor: AppColors.secondary.withOpacity(0.1),
+                     child: Text((p['passengerName'] ?? 'U')[0], style: const TextStyle(color: AppColors.secondary, fontWeight: FontWeight.bold)),
+                   ),
+                   const SizedBox(width: 12),
+                   Expanded(child: Text(p['passengerName'] ?? 'Unknown User', style: const TextStyle(fontWeight: FontWeight.bold))),
+                   const Icon(Icons.check_circle_rounded, color: Colors.green, size: 20),
+                 ],
+               ),
+             )).toList(),
+          ],
+        );
+      },
     );
   }
 

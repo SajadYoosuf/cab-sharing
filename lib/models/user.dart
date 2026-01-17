@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class UserModel extends Equatable {
   final String id;
@@ -16,6 +17,9 @@ class UserModel extends Equatable {
   final String? identityDocUrl;
   final String? selfieUrl;
   final String? licenseUrl;
+  final bool isBanned;
+  final String? banReason;
+  final DateTime? banExpiryDate;
 
   const UserModel({
     required this.id,
@@ -33,13 +37,17 @@ class UserModel extends Equatable {
     this.identityDocUrl,
     this.selfieUrl,
     this.licenseUrl,
+    this.isBanned = false,
+    this.banReason,
+    this.banExpiryDate,
   });
 
   @override
   List<Object?> get props => [
         id, email, name, password, isVerified, isPhoneVerified, 
         verificationStatus, role, phone, identityDocBase64, selfieBase64, 
-        licenseBase64, identityDocUrl, selfieUrl, licenseUrl
+        licenseBase64, identityDocUrl, selfieUrl, licenseUrl,
+        isBanned, banReason, banExpiryDate
       ];
 
   Map<String, dynamic> toMap() {
@@ -59,6 +67,9 @@ class UserModel extends Equatable {
       'identityDocUrl': identityDocUrl,
       'selfieUrl': selfieUrl,
       'licenseUrl': licenseUrl,
+      'isBanned': isBanned,
+      'banReason': banReason,
+      'banExpiryDate': banExpiryDate,
     };
   }
 
@@ -79,6 +90,9 @@ class UserModel extends Equatable {
       identityDocUrl: map['identityDocUrl'],
       selfieUrl: map['selfieUrl'],
       licenseUrl: map['licenseUrl'],
+      isBanned: map['isBanned'] ?? false,
+      banReason: map['banReason'],
+      banExpiryDate: map['banExpiryDate'] != null ? (map['banExpiryDate'] as Timestamp).toDate() : null,
     );
   }
 }

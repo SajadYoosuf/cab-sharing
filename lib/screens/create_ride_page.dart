@@ -200,14 +200,77 @@ class _CreateRidePageState extends State<CreateRidePage> {
      final doc = await FirebaseFirestore.instance.collection('users').doc(user.id).get();
      final data = doc.data();
      
-     if (data == null || data['licenseStatus'] != 'approved') {
+     if (data == null || data['licenseStatus'] != 'approved' || (data['isBanned'] == true)) {
         if (!mounted) return;
+        
+        // Check for ban first
+        if (data != null && data['isBanned'] == true) {
+           final banReason = data['banReason'] ?? 'Violation of community guidelines';
+           final Timestamp? expiryTs = data['banExpiryDate'];
+           final expiryDate = expiryTs != null 
+               ? "${expiryTs.toDate().day}/${expiryTs.toDate().month}/${expiryTs.toDate().year}" 
+               : "Indefinitely";
+
+            showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => AlertDialog(
+              title: const Text('Account Suspended', style: TextStyle(color: Colors.red)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('You are currently banned from offering rides.'),
+                  const SizedBox(height: 8),
+                  Text('Reason: $banReason', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  Text('Expires: $expiryDate', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context); // Close dialog
+                    Navigator.pop(context); // Close CreateRidePage
+                  },
+                  child: const Text('Go Back'),
+                ),
+              ],
+            ),
+          );
+          return;
+        }
+
+        // If pending, show specific message
+        if (data != null && data['licenseStatus'] == 'pending') {
+           showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => AlertDialog(
+              title: const Text('License Verification Pending'),
+              content: const Text('Your driving license is currently under review by the admin. You will be notified once it is approved.'),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context); // Close dialog
+                    Navigator.pop(context); // Close CreateRidePage
+                  },
+                  child: const Text('Go Back'),
+                ),
+              ],
+            ),
+          );
+          return;
+        }
+
+        // If rejected or not uploaded
         showDialog(
           context: context,
           barrierDismissible: false,
           builder: (context) => AlertDialog(
             title: const Text('License Required'),
-            content: const Text('To offer rides, you must have an approved driving license. Please upload your license for verification.'),
+            content: Text(data != null && data['licenseStatus'] == 'rejected' 
+                ? 'Your previous license submission was rejected. Please upload a valid driving license to offer rides.'
+                : 'To offer rides, you must have an approved driving license. Please upload your license for verification.'),
             actions: [
               TextButton(
                 onPressed: () {

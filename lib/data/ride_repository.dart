@@ -8,5 +8,7 @@ abstract class RideRepository {
   Future<void> updateHostLocation(String rideId, double lat, double lng);
   Future<void> updateLiveStatus(String rideId, bool isLive);
   Future<void> decrementSeats(String rideId);
+  Future<List<Ride>> getRequestedRides(String userId); // For history (rides I requested)
+  Future<List<Map<String, dynamic>>> getAcceptedPassengers(String rideId); // For passenger list
   Future<Ride?> getRideById(String rideId);
 }

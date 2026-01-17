@@ -227,17 +227,7 @@ class _HomePageState extends State<HomePage> {
             ),
             onPressed: () => Navigator.pushNamed(context, '/admin_dashboard'),
           ),
-        IconButton(
-          icon: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.sos, color: Colors.white, size: 20),
-          ),
-          onPressed: () => _showSOSDialog(context),
-        ),
+
         // Notification Icon with Badge
         StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance.collection('announcements').snapshots(),

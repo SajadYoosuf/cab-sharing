@@ -246,6 +246,63 @@ class FirebaseRideRepository implements RideRepository {
     );
   }
 
+  @override
+  Future<List<Ride>> getRequestedRides(String userId) async {
+    try {
+      // 1. Get all requests made by this user
+      final requestSnapshot = await _firestore
+          .collection('ride_requests')
+          .where('passengerId', isEqualTo: userId)
+          .get();
+
+      if (requestSnapshot.docs.isEmpty) return [];
+
+      final rideIds = requestSnapshot.docs
+          .map((doc) => doc.data()['rideId'] as String)
+          .toSet()
+          .toList();
+
+      if (rideIds.isEmpty) return [];
+
+      // 2. Fetch the actual rides
+      // Firestore 'whereIn' is limited to 10 or 30 (depending on version). 
+      // If user has many requests, we might need to batch or fetch individually.
+      // For now, let's fetch individually to be safe against limit, or batches of 10.
+      
+      List<Ride> rides = [];
+      
+      // Fetching individually for simplicity and reliability with large sets
+      for (var id in rideIds) {
+        final doc = await _firestore.collection('rides').doc(id).get();
+        if (doc.exists) {
+          rides.add(_mapDocToEntity(doc));
+        }
+      }
+
+      // Sort by dateTime descending
+      rides.sort((a, b) => b.dateTime.compareTo(a.dateTime));
+
+      return rides;
+    } catch (e) {
+      throw FirestoreFailure('Failed to fetch requested rides');
+    }
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> getAcceptedPassengers(String rideId) async {
+    try {
+      final snapshot = await _firestore
+          .collection('ride_requests')
+          .where('rideId', isEqualTo: rideId)
+          .where('status', isEqualTo: 'accepted')
+          .get();
+
+      return snapshot.docs.map((doc) => doc.data()).toList();
+    } catch (e) {
+      throw FirestoreFailure('Failed to fetch passengers');
+    }
+  }
+
   RideLocation _parseLocation(Map<String, dynamic>? data) {
     if (data == null) return const RideLocation(name: '');
     return RideLocation(

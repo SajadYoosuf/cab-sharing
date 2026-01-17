@@ -12,6 +12,8 @@ import 'package:ride_share_app/screens/admin_verification_detail_page.dart';
 import 'package:ride_share_app/screens/admin_feedback_page.dart';
 import 'package:provider/provider.dart';
 import 'package:ride_share_app/providers/auth_provider.dart';
+import 'package:ride_share_app/models/user.dart';
+import 'package:intl/intl.dart';
 
 class AdminDashboardPage extends StatefulWidget {
   const AdminDashboardPage({super.key});
@@ -23,6 +25,11 @@ class AdminDashboardPage extends StatefulWidget {
 class _AdminDashboardPageState extends State<AdminDashboardPage> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   int _selectedIndex = 0;
+  String _userSearchQuery = '';
+
+  String _formatDate(DateTime date) {
+    return DateFormat('MMM d, yyyy').format(date);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -220,7 +227,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminAnnouncementPage())),
           ),
 
-          _buildActionItem('System Security', Icons.security_rounded, Colors.teal),
+
           _buildActionItem(
              'Verify Users', 
              Icons.verified_user, 
@@ -398,6 +405,20 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
       length: 3,
       child: Column(
         children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            child: TextField(
+              onChanged: (val) => setState(() => _userSearchQuery = val),
+              decoration: InputDecoration(
+                hintText: 'Search users by name or email...',
+                prefixIcon: const Icon(Icons.search_rounded),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+            ),
+          ),
           TabBar(
             labelColor: AppColors.primary,
             unselectedLabelColor: Colors.grey,
@@ -446,12 +467,26 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
           );
         }
 
+        // Filter by search query
+        final filteredDocs = docs.where((doc) {
+           final data = doc.data() as Map<String, dynamic>;
+           final name = (data['name'] ?? '').toString().toLowerCase();
+           final email = (data['email'] ?? '').toString().toLowerCase();
+           final query = _userSearchQuery.toLowerCase();
+           return name.contains(query) || email.contains(query);
+        }).toList();
+        
+        if (filteredDocs.isEmpty) {
+           return const Center(child: Text("No users match your search"));
+        }
+
         return ListView.builder(
-          padding: const EdgeInsets.all(20),
-          itemCount: docs.length,
+          padding: const EdgeInsets.only(left: 20, right: 20, bottom: 20), // Top padding handled by column
+          itemCount: filteredDocs.length,
           itemBuilder: (context, index) {
-            final data = docs[index].data() as Map<String, dynamic>;
-            final userId = docs[index].id;
+            final data = filteredDocs[index].data() as Map<String, dynamic>;
+            final userId = filteredDocs[index].id;
+            final userModel = UserModel.fromMap({...data, 'id': userId}); 
             
             return Container(
               margin: const EdgeInsets.only(bottom: 12),
@@ -469,12 +504,31 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                   ),
                 ),
                 leading: CircleAvatar(
-                  backgroundColor: _getStatusColor(status).withOpacity(0.1),
-                  child: Icon(Icons.person_rounded, color: _getStatusColor(status), size: 20),
+                  backgroundColor: userModel.isBanned ? Colors.red.withOpacity(0.1) : _getStatusColor(status).withOpacity(0.1),
+                  child: Icon(
+                    userModel.isBanned ? Icons.block_rounded : Icons.person_rounded, 
+                    color: userModel.isBanned ? Colors.red : _getStatusColor(status), 
+                    size: 20
+                  ),
                 ),
                 title: Text(data['name'] ?? 'No Name', style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text(data['email'] ?? 'No Email', style: const TextStyle(fontSize: 12)),
-                trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                     Text(data['email'] ?? 'No Email', style: const TextStyle(fontSize: 12)),
+                     if (userModel.isBanned)
+                       Text(
+                         userModel.banExpiryDate != null 
+                           ? 'Banned until ${_formatDate(userModel.banExpiryDate!)}'
+                           : 'Banned Indefinitely',
+                         style: const TextStyle(color: Colors.red, fontSize: 10, fontWeight: FontWeight.bold),
+                       ),
+                  ],
+                ),
+                trailing: IconButton(
+                  icon: const Icon(Icons.more_vert_rounded),
+                  onPressed: () => _showBanManagementBottomSheet(userModel),
+                ),
               ),
             );
           },
@@ -511,5 +565,155 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ride deleted')));
       }
     }
+  }
+
+  void _showBanManagementBottomSheet(UserModel user) {
+    final reasonController = TextEditingController(text: user.banReason);
+    String selectedDuration = '2 Weeks';
+    DateTime? customDate;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          return Container(
+            height: MediaQuery.of(context).size.height * 0.75,
+            padding: const EdgeInsets.all(24),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(child: Container(width: 50, height: 5, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)))),
+                const SizedBox(height: 24),
+                Text(
+                  'Manage Access', 
+                  style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.bold)
+                ),
+                Text('User: ${user.name}', style: const TextStyle(color: Colors.grey)),
+                const SizedBox(height: 32),
+                
+                if (user.isBanned) ...[
+                   Container(
+                     padding: const EdgeInsets.all(16),
+                     decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(16)),
+                     child: Row(
+                       children: [
+                         const Icon(Icons.block_rounded, color: Colors.red),
+                         const SizedBox(width: 16),
+                         Expanded(
+                           child: Column(
+                             crossAxisAlignment: CrossAxisAlignment.start,
+                             children: [
+                               const Text('User is currently BANNED', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                               Text(user.banReason ?? 'No reason provided', style: TextStyle(color: Colors.red.shade800, fontSize: 13)),
+                               if (user.banExpiryDate != null)
+                                 Text('Expires: ${_formatDate(user.banExpiryDate!)}', style: TextStyle(color: Colors.red.shade800, fontSize: 12)),
+                             ],
+                           ),
+                         ),
+                       ],
+                     ),
+                   ),
+                   const Spacer(),
+                   SizedBox(
+                     width: double.infinity,
+                     child: ElevatedButton(
+                       onPressed: () async {
+                         await _firestore.collection('users').doc(user.id).update({
+                           'isBanned': false,
+                           'banReason': FieldValue.delete(),
+                           'banExpiryDate': FieldValue.delete(),
+                         });
+                         if (mounted) Navigator.pop(context);
+                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('User unbanned successfully')));
+                       },
+                       style: ElevatedButton.styleFrom(
+                         backgroundColor: Colors.green,
+                         padding: const EdgeInsets.symmetric(vertical: 18),
+                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                       ),
+                       child: const Text('Unban User', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                     ),
+                   ),
+                ] else ...[
+                   Text('Select Ban Duration', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold)),
+                   const SizedBox(height: 16),
+                   Wrap(
+                     spacing: 12, runSpacing: 12,
+                     children: [
+                        _buildDurationChip('2 Weeks', selectedDuration, (v) => setSheetState(() => selectedDuration = v)),
+                        _buildDurationChip('2 Months', selectedDuration, (v) => setSheetState(() => selectedDuration = v)),
+                        _buildDurationChip('2 Years', selectedDuration, (v) => setSheetState(() => selectedDuration = v)),
+                        _buildDurationChip('Indefinite', selectedDuration, (v) => setSheetState(() => selectedDuration = v)),
+                     ],
+                   ),
+                   const SizedBox(height: 24),
+                   TextField(
+                     controller: reasonController,
+                     maxLines: 3,
+                     decoration: InputDecoration(
+                       labelText: 'Reason for ban',
+                       alignLabelWithHint: true,
+                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                     ),
+                   ),
+                   const Spacer(),
+                   SizedBox(
+                     width: double.infinity,
+                     child: ElevatedButton(
+                       onPressed: () async {
+                          if (reasonController.text.isEmpty) {
+                             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please provide a reason')));
+                             return;
+                          }
+                          
+                          DateTime? expiry;
+                          final now = DateTime.now();
+                          if (selectedDuration == '2 Weeks') expiry = now.add(const Duration(days: 14));
+                          if (selectedDuration == '2 Months') expiry = now.add(const Duration(days: 60));
+                          if (selectedDuration == '2 Years') expiry = now.add(const Duration(days: 730));
+                          // Indefinite = null expiry
+
+                          await _firestore.collection('users').doc(user.id).update({
+                           'isBanned': true,
+                           'banReason': reasonController.text,
+                           'banExpiryDate': expiry,
+                         });
+                         if (mounted) Navigator.pop(context);
+                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('User banned successfully')));
+                       },
+                       style: ElevatedButton.styleFrom(
+                         backgroundColor: Colors.red,
+                         padding: const EdgeInsets.symmetric(vertical: 18),
+                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                       ),
+                       child: const Text('Ban User', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                     ),
+                   ),
+                ],
+                const SizedBox(height: 24),
+              ],
+            ),
+          );
+        }
+      ),
+    );
+  }
+
+  Widget _buildDurationChip(String label, String selected, Function(String) onSelect) {
+     final isSelected = label == selected;
+     return ChoiceChip(
+       label: Text(label),
+       selected: isSelected,
+       onSelected: (v) => onSelect(label),
+       selectedColor: Colors.red.withOpacity(0.2),
+       labelStyle: TextStyle(color: isSelected ? Colors.red : Colors.black, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
+       checkmarkColor: Colors.red,
+     );
   }
 }

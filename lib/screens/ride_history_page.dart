@@ -5,54 +5,92 @@ import 'package:ride_share_app/core/constants/app_colors.dart';
 import 'package:ride_share_app/providers/ride_provider.dart';
 import 'package:ride_share_app/models/ride.dart';
 import 'package:ride_share_app/screens/ride_detail_page.dart';
+import 'package:ride_share_app/providers/auth_provider.dart';
 
-class RideHistoryPage extends StatelessWidget {
+class RideHistoryPage extends StatefulWidget {
   const RideHistoryPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: Text('Ride History', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
-      body: Consumer<RideProvider>(
-        builder: (context, provider, _) {
-          final rides = provider.myRides;
-          
-          if (rides.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.history_rounded, size: 64, color: Colors.grey.shade300),
-                  const SizedBox(height: 16),
-                  Text('No ride history found', style: TextStyle(color: Colors.grey.shade600)),
-                ],
-              ),
-            );
-          }
+  State<RideHistoryPage> createState() => _RideHistoryPageState();
+}
 
-          return ListView.builder(
-            padding: const EdgeInsets.all(20),
-            itemCount: rides.length,
-            itemBuilder: (context, index) {
-              final ride = rides[index];
-              return _buildHistoryCard(context, ride);
-            },
-          );
-        },
+class _RideHistoryPageState extends State<RideHistoryPage> {
+  @override
+  void initState() {
+    super.initState();
+    final userId = Provider.of<AuthProvider>(context, listen: false).currentUser?.id;
+    if (userId != null) {
+      // Refresh both lists
+      final provider = Provider.of<RideProvider>(context, listen: false);
+      provider.loadMyRides(userId);
+      provider.loadRequestedRides(userId);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          title: Text('Ride History', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+          backgroundColor: Colors.white,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+            onPressed: () => Navigator.pop(context),
+          ),
+          bottom: const TabBar(
+            labelColor: AppColors.primary,
+            unselectedLabelColor: Colors.grey,
+            indicatorColor: AppColors.primary,
+            tabs: [
+              Tab(text: 'Offered'),
+              Tab(text: 'Requests'),
+            ],
+          ),
+        ),
+        body: Consumer<RideProvider>(
+          builder: (context, provider, _) {
+            return TabBarView(
+              children: [
+                _buildRideList(context, provider.myRides, 'No offered rides found'),
+                _buildRideList(context, provider.requestedRides, 'No requested rides found'),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
 
+  Widget _buildRideList(BuildContext context, List<Ride> rides, String emptyMessage) {
+    if (rides.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.history_rounded, size: 64, color: Colors.grey.shade300),
+            const SizedBox(height: 16),
+            Text(emptyMessage, style: TextStyle(color: Colors.grey.shade600)),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(20),
+      itemCount: rides.length,
+      itemBuilder: (context, index) {
+        final ride = rides[index];
+        return _buildHistoryCard(context, ride);
+      },
+    );
+  }
+
   Widget _buildHistoryCard(BuildContext context, Ride ride) {
+    // ... existing card implementation ...
     final statusColor = _getStatusColor(ride.status);
     
     return Container(

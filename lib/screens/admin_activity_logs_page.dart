@@ -60,23 +60,7 @@ class AdminActivityLogsPage extends StatelessWidget {
                  });
                }
                
-               // Mock System logs for "Activity"
-               logs.add({
-                 'type': 'system',
-                 'title': 'System Backup',
-                 'subtitle': 'Automated daily backup completed',
-                 'time': DateTime.now().subtract(const Duration(hours: 4)),
-                 'icon': Icons.storage_rounded,
-                 'color': Colors.green
-               });
-                logs.add({
-                 'type': 'login',
-                 'title': 'Admin Login',
-                 'subtitle': 'Administrator access granted',
-                 'time': DateTime.now().subtract(const Duration(minutes: 30)),
-                 'icon': Icons.shield_rounded,
-                 'color': Colors.orange
-               });
+
 
                logs.sort((a, b) => (b['time'] as DateTime).compareTo(a['time'] as DateTime));
 

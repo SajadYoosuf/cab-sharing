@@ -7,11 +7,13 @@ class RideProvider extends ChangeNotifier {
   
   List<Ride> _availableRides = [];
   List<Ride> _myRides = [];
+  List<Ride> _requestedRides = [];
   bool _isLoading = false;
   String? _error;
 
   List<Ride> get availableRides => _availableRides;
   List<Ride> get myRides => _myRides;
+  List<Ride> get requestedRides => _requestedRides;
   bool get isLoading => _isLoading;
   String? get error => _error;
 
@@ -38,6 +40,24 @@ class RideProvider extends ChangeNotifier {
       _error = e.toString();
     }
     notifyListeners();
+  }
+
+  Future<void> loadRequestedRides(String userId) async {
+    _error = null;
+    try {
+      _requestedRides = await _repository.getRequestedRides(userId);
+    } catch (e) {
+      _error = e.toString();
+    }
+    notifyListeners();
+  }
+
+  Future<List<Map<String, dynamic>>> getAcceptedPassengers(String rideId) async {
+    try {
+      return await _repository.getAcceptedPassengers(rideId);
+    } catch (e) {
+      return [];
+    }
   }
 
   double get totalCo2Saved {

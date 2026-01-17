@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:ride_share_app/providers/auth_provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
@@ -30,10 +32,24 @@ class _VehicleSettingsPageState extends State<VehicleSettingsPage> {
   }
 
   Future<void> _saveSettings() async {
-    if (_formKey.currentState!.validate() && _licenseImage != null) {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final user = auth.currentUser;
+    final isLicenseApproved = user?.verificationStatus == 'approved';
+
+    if (_formKey.currentState!.validate()) {
+      // If not approved, image is mandatory
+      if (!isLicenseApproved && _licenseImage == null) {
+         ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please upload your license image for verification.')),
+        );
+        return;
+      }
+
       setState(() => _isSaving = true);
-      // Simulate saving
+      // Simulate saving (In real app, update firestore here)
+      // If image is provided, upload it. If not and approved, skip it.
       await Future.delayed(const Duration(seconds: 2));
+      
       setState(() => _isSaving = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -41,10 +57,6 @@ class _VehicleSettingsPageState extends State<VehicleSettingsPage> {
         );
         Navigator.pop(context);
       }
-    } else if (_licenseImage == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please upload your license image.')),
-      );
     }
   }
 
@@ -103,45 +115,48 @@ class _VehicleSettingsPageState extends State<VehicleSettingsPage> {
                 ],
               ),
             ),
-            const SizedBox(height: 32),
-            _buildSectionTitle('Verification'),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Driving License', style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 12),
-                  GestureDetector(
-                    onTap: _pickImage,
-                    child: Container(
-                      height: 150,
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade50,
-                        border: Border.all(color: Colors.grey.shade300, style: BorderStyle.solid),
-                        borderRadius: BorderRadius.circular(12),
+              // Only show verification section if not already approved
+              if (Provider.of<AuthProvider>(context).currentUser?.verificationStatus != 'approved') ...[
+                const SizedBox(height: 32),
+                _buildSectionTitle('Verification'),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Driving License', style: TextStyle(fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 12),
+                      GestureDetector(
+                        onTap: _pickImage,
+                        child: Container(
+                          height: 150,
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade50,
+                            border: Border.all(color: Colors.grey.shade300, style: BorderStyle.solid),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: _licenseImage != null
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Image.file(_licenseImage!, fit: BoxFit.cover),
+                                )
+                              : Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(Icons.cloud_upload_rounded, size: 40, color: Colors.blue),
+                                    const SizedBox(height: 8),
+                                    Text('Tap to upload license image', style: TextStyle(color: Colors.grey.shade600)),
+                                  ],
+                                ),
+                        ),
                       ),
-                      child: _licenseImage != null
-                          ? ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: Image.file(_licenseImage!, fit: BoxFit.cover),
-                            )
-                          : Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(Icons.cloud_upload_rounded, size: 40, color: Colors.blue),
-                                const SizedBox(height: 8),
-                                Text('Tap to upload license image', style: TextStyle(color: Colors.grey.shade600)),
-                              ],
-                            ),
-                    ),
+                    ],
                   ),
-                ],
-              ),
-            ),
+                ),
+              ],
             const SizedBox(height: 48),
             SizedBox(
               height: 56,
