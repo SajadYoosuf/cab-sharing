@@ -7,7 +7,7 @@ import 'package:ride_share_app/data/auth_repository.dart';
 
 class AuthProvider extends ChangeNotifier {
   final AuthRepository _authRepository;
-  
+
   UserModel? _currentUser;
   bool _isLoading = false;
   String? _error;
@@ -44,7 +44,7 @@ class AuthProvider extends ChangeNotifier {
   Future<void> checkAuthStatus() async {
     // If it's the static admin, don't check via Firebase
     if (_currentUser?.id == 'admin_static_id') {
-       return;
+      return;
     }
 
     try {
@@ -124,5 +124,43 @@ class AuthProvider extends ChangeNotifier {
     await _clearUserFromPrefs();
     _currentUser = null;
     notifyListeners();
+  }
+
+  Future<bool> sendPasswordResetEmail(String email) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      await _authRepository.sendPasswordResetEmail(email);
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> updateUser(UserModel user) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      await _authRepository.updateUser(user);
+      _currentUser = user; // Update local state
+      await _saveUserToPrefs(user); // Persist
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
   }
 }

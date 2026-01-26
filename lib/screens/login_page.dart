@@ -86,7 +86,8 @@ class _LoginPageState extends State<LoginPage> {
                               hintText: 'name@example.com',
                               prefixIcon: Icon(Icons.email_outlined),
                             ),
-                            validator: (v) => v!.isEmpty ? 'Email is required' : null,
+                            validator: (v) =>
+                                v!.isEmpty ? 'Email is required' : null,
                           ),
                           const SizedBox(height: 20),
                           TextFormField(
@@ -98,7 +99,9 @@ class _LoginPageState extends State<LoginPage> {
                               prefixIcon: const Icon(Icons.lock_outlined),
                               suffixIcon: IconButton(
                                 icon: Icon(
-                                  _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
+                                  _isPasswordVisible
+                                      ? Icons.visibility
+                                      : Icons.visibility_off,
                                   color: Colors.grey,
                                 ),
                                 onPressed: () {
@@ -108,14 +111,32 @@ class _LoginPageState extends State<LoginPage> {
                                 },
                               ),
                             ),
-                            validator: (v) => v!.isEmpty ? 'Password is required' : null,
+                            validator: (v) =>
+                                v!.isEmpty ? 'Password is required' : null,
+                          ),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: () => Navigator.pushNamed(
+                                context,
+                                '/forgot_password',
+                              ),
+                              child: const Text(
+                                'Forgot Password?',
+                                style: TextStyle(
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ),
                           ),
                           const SizedBox(height: 32),
                           Consumer<AuthProvider>(
                             builder: (context, auth, _) {
                               return ElevatedButton(
                                 style: ElevatedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                  ),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(16),
                                   ),
@@ -133,26 +154,56 @@ class _LoginPageState extends State<LoginPage> {
                                             // Refresh user to get latest Firestore data (status, role)
                                             await auth.checkAuthStatus();
                                             final user = auth.currentUser;
-                                            
+
                                             if (user != null) {
-                                               if (user.role == 'admin') {
-                                                  Navigator.pushNamedAndRemoveUntil(context, '/admin_dashboard', (route) => false);
-                                               } else if (user.verificationStatus == 'approved') {
-                                                  Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
-                                               } else if (user.verificationStatus == 'pending' || user.verificationStatus == 'rejected') {
-                                                  Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const VerificationStatusPage())); // Use const
-                                               } else {
-                                                  // Default to phone verification if not approved/pending
-                                                  Navigator.pushNamedAndRemoveUntil(context, '/phone_verification', (route) => false);
-                                               }
+                                              if (user.role == 'admin') {
+                                                Navigator.pushNamedAndRemoveUntil(
+                                                  context,
+                                                  '/admin_dashboard',
+                                                  (route) => false,
+                                                );
+                                              } else if (user
+                                                      .verificationStatus ==
+                                                  'approved') {
+                                                Navigator.pushNamedAndRemoveUntil(
+                                                  context,
+                                                  '/home',
+                                                  (route) => false,
+                                                );
+                                              } else if (user
+                                                          .verificationStatus ==
+                                                      'pending' ||
+                                                  user.verificationStatus ==
+                                                      'rejected') {
+                                                Navigator.pushReplacement(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (_) =>
+                                                        const VerificationStatusPage(),
+                                                  ),
+                                                ); // Use const
+                                              } else {
+                                                // Default to phone verification if not approved/pending
+                                                Navigator.pushNamedAndRemoveUntil(
+                                                  context,
+                                                  '/phone_verification',
+                                                  (route) => false,
+                                                );
+                                              }
                                             }
                                           } else {
                                             if (!mounted) return;
-                                            ScaffoldMessenger.of(context).showSnackBar(
+                                            ScaffoldMessenger.of(
+                                              context,
+                                            ).showSnackBar(
                                               SnackBar(
-                                                content: Text(auth.error ?? 'Login Failed'),
-                                                behavior: SnackBarBehavior.floating,
-                                                backgroundColor: AppColors.error,
+                                                content: Text(
+                                                  auth.error ?? 'Login Failed',
+                                                ),
+                                                behavior:
+                                                    SnackBarBehavior.floating,
+                                                backgroundColor:
+                                                    AppColors.error,
                                               ),
                                             );
                                           }
@@ -169,7 +220,10 @@ class _LoginPageState extends State<LoginPage> {
                                       )
                                     : const Text(
                                         'Login',
-                                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
                               );
                             },
@@ -177,12 +231,17 @@ class _LoginPageState extends State<LoginPage> {
                           const SizedBox(height: 16),
                           Center(
                             child: TextButton(
-                              onPressed: () => Navigator.pushNamed(context, '/register'),
+                              onPressed: () =>
+                                  Navigator.pushNamed(context, '/register'),
                               child: RichText(
                                 text: TextSpan(
-                                  style: const TextStyle(color: AppColors.textSecondary),
+                                  style: const TextStyle(
+                                    color: AppColors.textSecondary,
+                                  ),
                                   children: [
-                                    const TextSpan(text: "Don't have an account? "),
+                                    const TextSpan(
+                                      text: "Don't have an account? ",
+                                    ),
                                     TextSpan(
                                       text: "Sign Up",
                                       style: TextStyle(
@@ -204,11 +263,18 @@ class _LoginPageState extends State<LoginPage> {
                     child: TextButton.icon(
                       onPressed: () => Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (context) => const AdminLoginPage()),
+                        MaterialPageRoute(
+                          builder: (context) => const AdminLoginPage(),
+                        ),
                       ),
-                      icon: const Icon(Icons.admin_panel_settings_outlined, size: 18),
+                      icon: const Icon(
+                        Icons.admin_panel_settings_outlined,
+                        size: 18,
+                      ),
                       label: const Text('Admin Access'),
-                      style: TextButton.styleFrom(foregroundColor: AppColors.textHint),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.textHint,
+                      ),
                     ),
                   ),
                 ],

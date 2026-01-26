@@ -8,25 +8,24 @@ class FirebaseAuthRepository implements AuthRepository {
   final FirebaseAuth _firebaseAuth;
   final FirebaseFirestore _firestore;
 
-  FirebaseAuthRepository({FirebaseAuth? firebaseAuth, FirebaseFirestore? firestore})
-      : _firebaseAuth = firebaseAuth ?? FirebaseAuth.instance,
-        _firestore = firestore ?? FirebaseFirestore.instance;
+  FirebaseAuthRepository({
+    FirebaseAuth? firebaseAuth,
+    FirebaseFirestore? firestore,
+  }) : _firebaseAuth = firebaseAuth ?? FirebaseAuth.instance,
+       _firestore = firestore ?? FirebaseFirestore.instance;
 
   @override
   Future<UserModel> login(String email, String password) async {
     try {
       final UserCredential credential = await _firebaseAuth
           .signInWithEmailAndPassword(email: email, password: password);
-      
+
       final user = credential.user!;
-      
+
       // Fetch user data from Firestore to get role and other details
       final userDoc = await _firestore.collection('users').doc(user.uid).get();
       if (userDoc.exists) {
-        return UserModel.fromMap({
-          ...userDoc.data()!,
-          'id': user.uid,
-        });
+        return UserModel.fromMap({...userDoc.data()!, 'id': user.uid});
       } else {
         // Migration: Save existing auth user to Firestore
         final newUser = UserModel(
@@ -56,10 +55,10 @@ class FirebaseAuthRepository implements AuthRepository {
     try {
       final UserCredential credential = await _firebaseAuth
           .createUserWithEmailAndPassword(email: email, password: password);
-      
+
       final user = credential.user!;
       await user.updateDisplayName(name);
-      
+
       final userEntity = UserModel(
         id: user.uid,
         name: name,
@@ -69,15 +68,20 @@ class FirebaseAuthRepository implements AuthRepository {
       );
 
       // Save user to Firestore for admin visibility
-      await _firestore.collection('users').doc(user.uid).set(userEntity.toMap());
-      
+      await _firestore
+          .collection('users')
+          .doc(user.uid)
+          .set(userEntity.toMap());
+
       return userEntity;
     } on FirebaseAuthException catch (e) {
       print('Firebase Auth Register Error: ${e.code} - ${e.message}');
       throw AuthFailure.fromFirebase(e.code);
     } catch (e) {
       print('General Register Error: $e');
-      throw AuthFailure('An unexpected error occurred during registration. Details: $e');
+      throw AuthFailure(
+        'An unexpected error occurred during registration. Details: $e',
+      );
     }
   }
 
@@ -90,15 +94,15 @@ class FirebaseAuthRepository implements AuthRepository {
   Future<UserModel?> getCurrentUser() async {
     // Ensure we wait for the persistence layer to restoration
     final user = await _firebaseAuth.authStateChanges().first;
-    
+
     if (user != null) {
       try {
-        final userDoc = await _firestore.collection('users').doc(user.uid).get();
+        final userDoc = await _firestore
+            .collection('users')
+            .doc(user.uid)
+            .get();
         if (userDoc.exists) {
-          return UserModel.fromMap({
-            ...userDoc.data()!,
-            'id': user.uid,
-          });
+          return UserModel.fromMap({...userDoc.data()!, 'id': user.uid});
         }
         return UserModel(
           id: user.uid,
@@ -115,5 +119,27 @@ class FirebaseAuthRepository implements AuthRepository {
       }
     }
     return null;
+  }
+
+  @override
+  Future<void> sendPasswordResetEmail(String email) async {
+    try {
+      await _firebaseAuth.sendPasswordResetEmail(email: email);
+    } on FirebaseAuthException catch (e) {
+      throw AuthFailure.fromFirebase(e.code);
+    } catch (e) {
+      throw AuthFailure(
+        'An unexpected error occurred while sending password reset email.',
+      );
+    }
+  }
+
+  @override
+  Future<void> updateUser(UserModel user) async {
+    try {
+      await _firestore.collection('users').doc(user.id).update(user.toMap());
+    } catch (e) {
+      throw AuthFailure('Failed to update user profile: $e');
+    }
   }
 }
