@@ -125,12 +125,13 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
       if (success) {
         final user = authProvider.currentUser;
         if (user != null && user.role == 'admin') {
-          if (mounted)
+          if (mounted) {
             Navigator.pushAndRemoveUntil(
               context,
               MaterialPageRoute(builder: (_) => const AdminDashboardPage()),
               (r) => false,
             );
+          }
         } else {
           if (mounted) {
             setState(() {
@@ -141,11 +142,12 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
           }
         }
       } else {
-        if (mounted)
+        if (mounted) {
           setState(() {
             _errorMessage = authProvider.error ?? 'Login Failed';
             _isLoading = false;
           });
+        }
       }
     }
   }
@@ -294,12 +296,14 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
             );
           }
         } else {
-          if (mounted)
+          if (mounted) {
             setState(() => _errorMessage = 'User found but ROLE is not admin');
+          }
         }
       } else {
-        if (mounted)
+        if (mounted) {
           setState(() => _errorMessage = 'No user found with this UID');
+        }
       }
     } catch (e) {
       if (mounted) setState(() => _errorMessage = 'Bypass Error: $e');

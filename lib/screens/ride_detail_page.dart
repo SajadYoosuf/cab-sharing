@@ -43,35 +43,48 @@ class _RideDetailPageState extends State<RideDetailPage> {
     } else {
       setState(() => _isLoadingStatus = false);
     }
-    
+
     if (widget.ride.status == RideStatus.completed) {
       _checkFeedbackStatus();
     }
   }
 
   Future<void> _checkFeedbackStatus() async {
-     final auth = Provider.of<AuthProvider>(context, listen: false);
-     final feedbackProvider = Provider.of<FeedbackProvider>(context, listen: false);
-     if (auth.currentUser != null) {
-        final submitted = await feedbackProvider.hasSubmittedFeedback(widget.ride.id, auth.currentUser!.id);
-        if (mounted) {
-          setState(() => _hasSubmittedFeedback = submitted);
-          if (!submitted && !_isHost && _requestStatus == RideRequestStatus.accepted) {
-             // Auto show dialog after a small delay
-             Future.delayed(const Duration(milliseconds: 500), () {
-               if (mounted) _showFeedbackDialog();
-             });
-          }
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final feedbackProvider = Provider.of<FeedbackProvider>(
+      context,
+      listen: false,
+    );
+    if (auth.currentUser != null) {
+      final submitted = await feedbackProvider.hasSubmittedFeedback(
+        widget.ride.id,
+        auth.currentUser!.id,
+      );
+      if (mounted) {
+        setState(() => _hasSubmittedFeedback = submitted);
+        if (!submitted &&
+            !_isHost &&
+            _requestStatus == RideRequestStatus.accepted) {
+          // Auto show dialog after a small delay
+          Future.delayed(const Duration(milliseconds: 500), () {
+            if (mounted) _showFeedbackDialog();
+          });
         }
-     }
+      }
+    }
   }
-  
 
   Future<void> _checkRequestStatus() async {
     final auth = Provider.of<AuthProvider>(context, listen: false);
-    final requestProvider = Provider.of<RideRequestProvider>(context, listen: false);
+    final requestProvider = Provider.of<RideRequestProvider>(
+      context,
+      listen: false,
+    );
     if (auth.currentUser != null) {
-      final status = await requestProvider.getRequestStatus(widget.ride.id, auth.currentUser!.id);
+      final status = await requestProvider.getRequestStatus(
+        widget.ride.id,
+        auth.currentUser!.id,
+      );
       if (mounted) {
         setState(() {
           _requestStatus = status;
@@ -89,11 +102,13 @@ class _RideDetailPageState extends State<RideDetailPage> {
         setState(() {
           _currentPosition = LatLng(pos.latitude, pos.longitude);
         });
-        
+
         // If host, update location in Firestore
         if (_isHost) {
-          Provider.of<RideProvider>(context, listen: false)
-              .updateHostLocation(widget.ride.id, pos.latitude, pos.longitude);
+          Provider.of<RideProvider>(
+            context,
+            listen: false,
+          ).updateHostLocation(widget.ride.id, pos.latitude, pos.longitude);
         }
       }
     });
@@ -101,10 +116,15 @@ class _RideDetailPageState extends State<RideDetailPage> {
 
   Future<void> _sendRideRequest() async {
     final auth = Provider.of<AuthProvider>(context, listen: false);
-    final requestProvider = Provider.of<RideRequestProvider>(context, listen: false);
-    
+    final requestProvider = Provider.of<RideRequestProvider>(
+      context,
+      listen: false,
+    );
+
     if (auth.currentUser == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please login to request a ride")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please login to request a ride")),
+      );
       return;
     }
 
@@ -122,9 +142,15 @@ class _RideDetailPageState extends State<RideDetailPage> {
     if (mounted) {
       if (success) {
         setState(() => _requestStatus = RideRequestStatus.pending);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Request sent successfully!")));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Request sent successfully!")),
+        );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Failed to send request or already requested.")));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Failed to send request or already requested."),
+          ),
+        );
       }
     }
   }
@@ -134,7 +160,9 @@ class _RideDetailPageState extends State<RideDetailPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("SOS Triggered"),
-        content: const Text("Emergency contacts have been notified with your current location."),
+        content: const Text(
+          "Emergency contacts have been notified with your current location.",
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -160,7 +188,11 @@ class _RideDetailPageState extends State<RideDetailPage> {
           child: CircleAvatar(
             backgroundColor: Colors.white,
             child: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: AppColors.textPrimary),
+              icon: const Icon(
+                Icons.arrow_back_ios_new,
+                size: 20,
+                color: AppColors.textPrimary,
+              ),
               onPressed: () => Navigator.pop(context),
             ),
           ),
@@ -171,7 +203,11 @@ class _RideDetailPageState extends State<RideDetailPage> {
             child: CircleAvatar(
               backgroundColor: Colors.white,
               child: IconButton(
-                icon: const Icon(Icons.chat_bubble_outline_rounded, size: 20, color: AppColors.primary),
+                icon: const Icon(
+                  Icons.chat_bubble_outline_rounded,
+                  size: 20,
+                  color: AppColors.primary,
+                ),
                 onPressed: () {
                   Navigator.push(
                     context,
@@ -193,10 +229,7 @@ class _RideDetailPageState extends State<RideDetailPage> {
         children: [
           FlutterMap(
             mapController: _mapController,
-            options: MapOptions(
-              initialCenter: start,
-              initialZoom: 13.0,
-            ),
+            options: MapOptions(initialCenter: start, initialZoom: 13.0),
             children: [
               TileLayer(
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -222,8 +255,21 @@ class _RideDetailPageState extends State<RideDetailPage> {
                       children: [
                         Container(
                           padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4)]),
-                          child: const Icon(Icons.my_location_rounded, color: AppColors.primary, size: 24),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 4,
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.my_location_rounded,
+                            color: AppColors.primary,
+                            size: 24,
+                          ),
                         ),
                       ],
                     ),
@@ -236,15 +282,32 @@ class _RideDetailPageState extends State<RideDetailPage> {
                       children: [
                         Container(
                           padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4)]),
-                          child: const Icon(Icons.location_on_rounded, color: AppColors.secondary, size: 24),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 4,
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.location_on_rounded,
+                            color: AppColors.secondary,
+                            size: 24,
+                          ),
                         ),
                       ],
                     ),
                   ),
-                  if (widget.ride.hostLatitude != null && widget.ride.hostLongitude != null)
+                  if (widget.ride.hostLatitude != null &&
+                      widget.ride.hostLongitude != null)
                     Marker(
-                      point: LatLng(widget.ride.hostLatitude!, widget.ride.hostLongitude!),
+                      point: LatLng(
+                        widget.ride.hostLatitude!,
+                        widget.ride.hostLongitude!,
+                      ),
                       width: 50,
                       height: 50,
                       child: Container(
@@ -254,7 +317,11 @@ class _RideDetailPageState extends State<RideDetailPage> {
                           border: Border.all(color: Colors.orange, width: 2),
                         ),
                         child: const Center(
-                          child: Icon(Icons.directions_car_filled_rounded, color: Colors.orange, size: 20),
+                          child: Icon(
+                            Icons.directions_car_filled_rounded,
+                            color: Colors.orange,
+                            size: 20,
+                          ),
                         ),
                       ),
                     ),
@@ -267,10 +334,17 @@ class _RideDetailPageState extends State<RideDetailPage> {
                         decoration: BoxDecoration(
                           color: AppColors.primary.withOpacity(0.2),
                           shape: BoxShape.circle,
-                          border: Border.all(color: AppColors.primary, width: 2),
+                          border: Border.all(
+                            color: AppColors.primary,
+                            width: 2,
+                          ),
                         ),
                         child: const Center(
-                          child: Icon(Icons.person_pin_circle_rounded, color: AppColors.primary, size: 20),
+                          child: Icon(
+                            Icons.person_pin_circle_rounded,
+                            color: AppColors.primary,
+                            size: 20,
+                          ),
                         ),
                       ),
                     ),
@@ -278,7 +352,7 @@ class _RideDetailPageState extends State<RideDetailPage> {
               ),
             ],
           ),
-          
+
           DraggableScrollableSheet(
             initialChildSize: 0.45,
             minChildSize: 0.35,
@@ -287,7 +361,9 @@ class _RideDetailPageState extends State<RideDetailPage> {
               return Container(
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(40)),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(40),
+                  ),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withOpacity(0.08),
@@ -298,7 +374,10 @@ class _RideDetailPageState extends State<RideDetailPage> {
                 ),
                 child: ListView(
                   controller: scrollController,
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
                   children: [
                     Center(
                       child: Container(
@@ -321,23 +400,42 @@ class _RideDetailPageState extends State<RideDetailPage> {
                             children: [
                               Text(
                                 '${widget.ride.hostName}\'s Trip',
-                                style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                                style: GoogleFonts.outfit(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textPrimary,
+                                ),
                               ),
                               const SizedBox(height: 4),
                               Row(
                                 children: [
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primary.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
                                     child: Text(
-                                      widget.ride.vehicleType.name.toUpperCase(),
-                                      style: const TextStyle(color: AppColors.primary, fontSize: 10, fontWeight: FontWeight.bold),
+                                      widget.ride.vehicleType.name
+                                          .toUpperCase(),
+                                      style: const TextStyle(
+                                        color: AppColors.primary,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
                                     ),
                                   ),
                                   const SizedBox(width: 8),
                                   Text(
                                     '${widget.ride.seats} Seats Available',
-                                    style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.w600, fontSize: 13),
+                                    style: TextStyle(
+                                      color: AppColors.textSecondary,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -346,40 +444,89 @@ class _RideDetailPageState extends State<RideDetailPage> {
                         ),
                         Text(
                           '₹${widget.ride.price.toStringAsFixed(0)}',
-                          style: GoogleFonts.outfit(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 32),
+                          style: GoogleFonts.outfit(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 32,
+                          ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 32),
-                    Text('Route Information', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold)),
+                    Text(
+                      'Route Information',
+                      style: GoogleFonts.outfit(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     const SizedBox(height: 16),
                     _buildRouteInfo(),
                     const SizedBox(height: 32),
-                    Text('Ride Preferences', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold)),
+                    Text(
+                      'Ride Preferences',
+                      style: GoogleFonts.outfit(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     const SizedBox(height: 16),
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
                       children: [
-                        if (widget.ride.noAlcohol) _buildPrefChip(Icons.no_drinks_rounded, 'No Alcohol'),
-                        if (widget.ride.noSmoking) _buildPrefChip(Icons.smoke_free_rounded, 'No Smoking'),
-                        if (widget.ride.noPets) _buildPrefChip(Icons.pets_rounded, 'No Pets'),
-                        if (widget.ride.noLuggage) _buildPrefChip(Icons.no_backpack_rounded, 'No Luggage'),
-                        if (!widget.ride.noAlcohol && !widget.ride.noSmoking && !widget.ride.noPets && !widget.ride.noLuggage)
-                          Text('No specific preferences set', style: TextStyle(color: Colors.grey.shade400, fontSize: 13)),
+                        if (widget.ride.noAlcohol)
+                          _buildPrefChip(Icons.no_drinks_rounded, 'No Alcohol'),
+                        if (widget.ride.noSmoking)
+                          _buildPrefChip(
+                            Icons.smoke_free_rounded,
+                            'No Smoking',
+                          ),
+                        if (widget.ride.noPets)
+                          _buildPrefChip(Icons.pets_rounded, 'No Pets'),
+                        if (widget.ride.noLuggage)
+                          _buildPrefChip(
+                            Icons.no_backpack_rounded,
+                            'No Luggage',
+                          ),
+                        if (!widget.ride.noAlcohol &&
+                            !widget.ride.noSmoking &&
+                            !widget.ride.noPets &&
+                            !widget.ride.noLuggage)
+                          Text(
+                            'No specific preferences set',
+                            style: TextStyle(
+                              color: Colors.grey.shade400,
+                              fontSize: 13,
+                            ),
+                          ),
                       ],
                     ),
                     const SizedBox(height: 32),
-                    Text('Host Profile', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold)),
+                    Text(
+                      'Host Profile',
+                      style: GoogleFonts.outfit(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     const SizedBox(height: 16),
                     _buildHostInfo(),
                     if (widget.ride.note.isNotEmpty) ...[
                       const SizedBox(height: 32),
-                      Text('Trip Notes', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold)),
+                      Text(
+                        'Trip Notes',
+                        style: GoogleFonts.outfit(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                       const SizedBox(height: 12),
                       _buildNoteSection(),
                     ],
-                    if (widget.ride.status == RideStatus.completed && !_isHost && _requestStatus == RideRequestStatus.accepted) ...[
+                    if (widget.ride.status == RideStatus.completed &&
+                        !_isHost &&
+                        _requestStatus == RideRequestStatus.accepted) ...[
                       const SizedBox(height: 32),
                       _buildFeedbackSection(),
                     ],
@@ -388,36 +535,93 @@ class _RideDetailPageState extends State<RideDetailPage> {
                     if (_isHost)
                       Column(
                         children: [
-                          if (widget.ride.status == RideStatus.open || widget.ride.status == RideStatus.booked)
+                          if (widget.ride.status == RideStatus.open ||
+                              widget.ride.status == RideStatus.booked)
                             SizedBox(
                               width: double.infinity,
                               child: ElevatedButton(
                                 onPressed: () {
-                                  final userId = Provider.of<AuthProvider>(context, listen: false).currentUser?.id ?? '';
-                                  Provider.of<RideProvider>(context, listen: false).updateRideStatus(widget.ride.id, RideStatus.ongoing, userId);
+                                  final userId =
+                                      Provider.of<AuthProvider>(
+                                        context,
+                                        listen: false,
+                                      ).currentUser?.id ??
+                                      '';
+                                  Provider.of<RideProvider>(
+                                    context,
+                                    listen: false,
+                                  ).updateRideStatus(
+                                    widget.ride.id,
+                                    RideStatus.ongoing,
+                                    userId,
+                                  );
                                 },
                                 style: ElevatedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(vertical: 20),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 20,
+                                  ),
                                   backgroundColor: Colors.blue,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
                                 ),
-                                child: const Text('Start Trip', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                                child: const Text(
+                                  'Start Trip',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
                               ),
                             ),
                           if (widget.ride.status == RideStatus.ongoing)
                             SizedBox(
                               width: double.infinity,
                               child: ElevatedButton(
-                                onPressed: () {
-                                  final userId = Provider.of<AuthProvider>(context, listen: false).currentUser?.id ?? '';
-                                  Provider.of<RideProvider>(context, listen: false).updateRideStatus(widget.ride.id, RideStatus.completed, userId);
+                                onPressed: () async {
+                                  final userId =
+                                      Provider.of<AuthProvider>(
+                                        context,
+                                        listen: false,
+                                      ).currentUser?.id ??
+                                      '';
+                                  await Provider.of<RideProvider>(
+                                    context,
+                                    listen: false,
+                                  ).updateRideStatus(
+                                    widget.ride.id,
+                                    RideStatus.completed,
+                                    userId,
+                                  );
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Trip Completed!'),
+                                      ),
+                                    );
+                                    Navigator.pop(
+                                      context,
+                                    ); // Go back after completion
+                                  }
                                 },
                                 style: ElevatedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(vertical: 20),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 20,
+                                  ),
                                   backgroundColor: Colors.green,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
                                 ),
-                                child: const Text('Complete Trip', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                                child: const Text(
+                                  'Complete Trip',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
                               ),
                             ),
                           const SizedBox(height: 12),
@@ -425,12 +629,24 @@ class _RideDetailPageState extends State<RideDetailPage> {
                             children: [
                               Expanded(
                                 child: OutlinedButton.icon(
-                                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatPage(rideId: widget.ride.id, title: 'Trip Group Chat'))),
+                                  onPressed: () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => ChatPage(
+                                        rideId: widget.ride.id,
+                                        title: 'Trip Group Chat',
+                                      ),
+                                    ),
+                                  ),
                                   icon: const Icon(Icons.group_rounded),
                                   label: const Text('Group Chat'),
                                   style: OutlinedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(vertical: 16),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 16,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
                                   ),
                                 ),
                               ),
@@ -442,22 +658,38 @@ class _RideDetailPageState extends State<RideDetailPage> {
                       Row(
                         children: [
                           Expanded(
-                            child: _isLoadingStatus 
-                              ? const Center(child: CircularProgressIndicator())
-                              : ElevatedButton(
-                                onPressed: _requestStatus == null ? _sendRideRequest : null,
-                                style: ElevatedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(vertical: 20),
-                                  backgroundColor: _getStatusColor(_requestStatus),
-                                  elevation: 8,
-                                  shadowColor: _getStatusColor(_requestStatus).withOpacity(0.4),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                                ),
-                                child: Text(
-                                  _getRequestButtonText(), 
-                                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)
-                                ),
-                              ),
+                            child: _isLoadingStatus
+                                ? const Center(
+                                    child: CircularProgressIndicator(),
+                                  )
+                                : ElevatedButton(
+                                    onPressed: _requestStatus == null
+                                        ? _sendRideRequest
+                                        : null,
+                                    style: ElevatedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 20,
+                                      ),
+                                      backgroundColor: _getStatusColor(
+                                        _requestStatus,
+                                      ),
+                                      elevation: 8,
+                                      shadowColor: _getStatusColor(
+                                        _requestStatus,
+                                      ).withOpacity(0.4),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      _getRequestButtonText(),
+                                      style: const TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
                           ),
                           const SizedBox(width: 16),
                           _buildSafeSOSButton(),
@@ -469,7 +701,7 @@ class _RideDetailPageState extends State<RideDetailPage> {
               );
             },
           ),
-          
+
           Positioned(
             top: MediaQuery.of(context).size.height * 0.4,
             right: 20,
@@ -479,7 +711,10 @@ class _RideDetailPageState extends State<RideDetailPage> {
               onPressed: () {
                 _mapController.move(_currentPosition ?? start, 15);
               },
-              child: const Icon(Icons.my_location_rounded, color: AppColors.primary),
+              child: const Icon(
+                Icons.my_location_rounded,
+                color: AppColors.primary,
+              ),
             ),
           ),
         ],
@@ -490,31 +725,43 @@ class _RideDetailPageState extends State<RideDetailPage> {
   Color _getStatusColor(RideRequestStatus? status) {
     if (status == null) return AppColors.primary;
     switch (status) {
-      case RideRequestStatus.pending: return Colors.orange;
-      case RideRequestStatus.accepted: return Colors.green;
-      case RideRequestStatus.rejected: return Colors.red;
-      case RideRequestStatus.cancelled: return Colors.grey;
+      case RideRequestStatus.pending:
+        return Colors.orange;
+      case RideRequestStatus.accepted:
+        return Colors.green;
+      case RideRequestStatus.rejected:
+        return Colors.red;
+      case RideRequestStatus.cancelled:
+        return Colors.grey;
     }
   }
 
   String _getRequestButtonText() {
     if (_requestStatus == null) return 'Request to Join';
     switch (_requestStatus!) {
-      case RideRequestStatus.pending: return 'Request Pending';
-      case RideRequestStatus.accepted: return 'Accepted';
-      case RideRequestStatus.rejected: return 'Rejected';
-      case RideRequestStatus.cancelled: return 'Cancelled';
+      case RideRequestStatus.pending:
+        return 'Request Pending';
+      case RideRequestStatus.accepted:
+        return 'Accepted';
+      case RideRequestStatus.rejected:
+        return 'Rejected';
+      case RideRequestStatus.cancelled:
+        return 'Cancelled';
     }
   }
 
   Widget _buildSafeSOSButton() {
-     return Container(
+    return Container(
       decoration: BoxDecoration(
         color: AppColors.error.withOpacity(0.1),
         borderRadius: BorderRadius.circular(20),
       ),
       child: IconButton(
-        icon: const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 28),
+        icon: const Icon(
+          Icons.warning_amber_rounded,
+          color: AppColors.error,
+          size: 28,
+        ),
         onPressed: _triggerSOS,
         padding: const EdgeInsets.all(16),
       ),
@@ -526,9 +773,17 @@ class _RideDetailPageState extends State<RideDetailPage> {
       children: [
         Column(
           children: [
-            const Icon(Icons.circle_outlined, size: 16, color: AppColors.primary),
+            const Icon(
+              Icons.circle_outlined,
+              size: 16,
+              color: AppColors.primary,
+            ),
             Container(width: 2, height: 40, color: Colors.grey.shade200),
-            const Icon(Icons.location_on_rounded, size: 16, color: AppColors.secondary),
+            const Icon(
+              Icons.location_on_rounded,
+              size: 16,
+              color: AppColors.secondary,
+            ),
           ],
         ),
         const SizedBox(width: 16),
@@ -536,9 +791,21 @@ class _RideDetailPageState extends State<RideDetailPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(widget.ride.from.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              Text(
+                widget.ride.from.name,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
               const SizedBox(height: 36),
-              Text(widget.ride.to.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              Text(
+                widget.ride.to.name,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
             ],
           ),
         ),
@@ -558,26 +825,40 @@ class _RideDetailPageState extends State<RideDetailPage> {
           CircleAvatar(
             radius: 24,
             backgroundColor: AppColors.primary.withOpacity(0.1),
-            child: Text(widget.ride.hostName[0], style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+            child: Text(
+              widget.ride.hostName[0],
+              style: const TextStyle(
+                color: AppColors.primary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(widget.ride.hostName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                const Text('Verified Host • 4.8 ★', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                Text(
+                  widget.ride.hostName,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                const Text(
+                  'Verified Host • 4.8 ★',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
               ],
             ),
           ),
-
         ],
       ),
     );
   }
 
   Widget _buildFeedbackSection() {
-     return Container(
+    return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: AppColors.primary.withOpacity(0.05),
@@ -586,17 +867,26 @@ class _RideDetailPageState extends State<RideDetailPage> {
       ),
       child: Column(
         children: [
-          const Icon(Icons.rate_review_rounded, size: 48, color: AppColors.primary),
+          const Icon(
+            Icons.rate_review_rounded,
+            size: 48,
+            color: AppColors.primary,
+          ),
           const SizedBox(height: 16),
           Text(
-            _hasSubmittedFeedback ? 'Thank you for your feedback!' : 'How was your trip?',
-            style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.bold),
+            _hasSubmittedFeedback
+                ? 'Thank you for your feedback!'
+                : 'How was your trip?',
+            style: GoogleFonts.outfit(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
           ),
           const SizedBox(height: 8),
           Text(
-            _hasSubmittedFeedback 
-              ? 'Your review helps us maintain a great community.'
-              : 'Share your experience to help others in the community.',
+            _hasSubmittedFeedback
+                ? 'Your review helps us maintain a great community.'
+                : 'Share your experience to help others in the community.',
             textAlign: TextAlign.center,
             style: TextStyle(color: AppColors.textSecondary),
           ),
@@ -609,9 +899,14 @@ class _RideDetailPageState extends State<RideDetailPage> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                 ),
-                child: const Text('Rate Your Experience', style: TextStyle(fontWeight: FontWeight.bold)),
+                child: const Text(
+                  'Rate Your Experience',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
               ),
             ),
         ],
@@ -622,42 +917,70 @@ class _RideDetailPageState extends State<RideDetailPage> {
   Widget _buildPassengerList() {
     // Show only if Host or if user is an accepted passenger (which they are if they can see this page and it's booked/ongoing)
     // Actually, let's show to everyone who can view details.
-    
+
     return FutureBuilder<List<Map<String, dynamic>>>(
-      future: Provider.of<RideProvider>(context, listen: false).getAcceptedPassengers(widget.ride.id),
+      future: Provider.of<RideProvider>(
+        context,
+        listen: false,
+      ).getAcceptedPassengers(widget.ride.id),
       builder: (context, snapshot) {
         if (!snapshot.hasData || snapshot.data!.isEmpty) {
-           return const SizedBox.shrink(); 
+          return const SizedBox.shrink();
         }
 
         final passengers = snapshot.data!;
-        
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-             const SizedBox(height: 32),
-             Text('Confirmed Passengers (${passengers.length})', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold)),
-             const SizedBox(height: 16),
-             ...passengers.map((p) => Container(
-               margin: const EdgeInsets.only(bottom: 12),
-               padding: const EdgeInsets.all(12),
-               decoration: BoxDecoration(
-                 color: Colors.white,
-                 borderRadius: BorderRadius.circular(16),
-                 border: Border.all(color: Colors.grey.shade200),
-               ),
-               child: Row(
-                 children: [
-                   CircleAvatar(
-                     backgroundColor: AppColors.secondary.withOpacity(0.1),
-                     child: Text((p['passengerName'] ?? 'U')[0], style: const TextStyle(color: AppColors.secondary, fontWeight: FontWeight.bold)),
-                   ),
-                   const SizedBox(width: 12),
-                   Expanded(child: Text(p['passengerName'] ?? 'Unknown User', style: const TextStyle(fontWeight: FontWeight.bold))),
-                   const Icon(Icons.check_circle_rounded, color: Colors.green, size: 20),
-                 ],
-               ),
-             )).toList(),
+            const SizedBox(height: 32),
+            Text(
+              'Confirmed Passengers (${passengers.length})',
+              style: GoogleFonts.outfit(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            ...passengers
+                .map(
+                  (p) => Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.grey.shade200),
+                    ),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          backgroundColor: AppColors.secondary.withOpacity(0.1),
+                          child: Text(
+                            (p['passengerName'] ?? 'U')[0],
+                            style: const TextStyle(
+                              color: AppColors.secondary,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            p['passengerName'] ?? 'Unknown User',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        const Icon(
+                          Icons.check_circle_rounded,
+                          color: Colors.green,
+                          size: 20,
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+                .toList(),
           ],
         );
       },
@@ -672,7 +995,9 @@ class _RideDetailPageState extends State<RideDetailPage> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
           title: const Text('Trip RideFeedback'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -681,14 +1006,19 @@ class _RideDetailPageState extends State<RideDetailPage> {
               const SizedBox(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(5, (index) => IconButton(
-                  icon: Icon(
-                    index < rating ? Icons.star_rounded : Icons.star_border_rounded,
-                    color: Colors.orange,
-                    size: 32,
+                children: List.generate(
+                  5,
+                  (index) => IconButton(
+                    icon: Icon(
+                      index < rating
+                          ? Icons.star_rounded
+                          : Icons.star_border_rounded,
+                      color: Colors.orange,
+                      size: 32,
+                    ),
+                    onPressed: () => setDialogState(() => rating = index + 1.0),
                   ),
-                  onPressed: () => setDialogState(() => rating = index + 1.0),
-                )),
+                ),
               ),
               const SizedBox(height: 16),
               TextField(
@@ -696,7 +1026,9 @@ class _RideDetailPageState extends State<RideDetailPage> {
                 maxLines: 3,
                 decoration: InputDecoration(
                   hintText: 'Add a comment (optional)',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                   filled: true,
                   fillColor: Colors.grey.shade50,
                 ),
@@ -711,8 +1043,11 @@ class _RideDetailPageState extends State<RideDetailPage> {
             ElevatedButton(
               onPressed: () async {
                 final auth = Provider.of<AuthProvider>(context, listen: false);
-                final feedbackProvider = Provider.of<FeedbackProvider>(context, listen: false);
-                
+                final feedbackProvider = Provider.of<FeedbackProvider>(
+                  context,
+                  listen: false,
+                );
+
                 final feedback = RideFeedback(
                   id: '',
                   rideId: widget.ride.id,
@@ -730,7 +1065,9 @@ class _RideDetailPageState extends State<RideDetailPage> {
                   setState(() => _hasSubmittedFeedback = true);
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('RideFeedback submitted successfully!'))
+                    const SnackBar(
+                      content: Text('RideFeedback submitted successfully!'),
+                    ),
                   );
                 }
               },
@@ -746,7 +1083,14 @@ class _RideDetailPageState extends State<RideDetailPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Note from Host', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.grey)),
+        const Text(
+          'Note from Host',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 13,
+            color: Colors.grey,
+          ),
+        ),
         const SizedBox(height: 8),
         Text(
           widget.ride.note,
@@ -769,7 +1113,10 @@ class _RideDetailPageState extends State<RideDetailPage> {
         children: [
           Icon(icon, size: 16, color: AppColors.textSecondary),
           const SizedBox(width: 8),
-          Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          ),
         ],
       ),
     );

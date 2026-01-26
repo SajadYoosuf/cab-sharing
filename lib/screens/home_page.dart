@@ -10,6 +10,10 @@ import 'package:ride_share_app/models/ride_request.dart';
 import 'package:ride_share_app/screens/ride_detail_page.dart';
 import 'notifications_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'package:ride_share_app/providers/feedback_provider.dart';
+import 'package:ride_share_app/models/ride_feedback.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -22,16 +26,140 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    Future.microtask(() {
-        if (!mounted) return;
-        final authProvider = Provider.of<AuthProvider>(context, listen: false);
-        final rideProvider = Provider.of<RideProvider>(context, listen: false);
-        
-        rideProvider.loadAvailableRides();
-        if (authProvider.currentUser != null) {
-          rideProvider.loadMyRides(authProvider.currentUser!.id);
-        }
+    Future.microtask(() async {
+      if (!mounted) return;
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final rideProvider = Provider.of<RideProvider>(context, listen: false);
+
+      rideProvider.loadAvailableRides();
+      if (authProvider.currentUser != null) {
+        await rideProvider.loadMyRides(authProvider.currentUser!.id);
+      }
     });
+  }
+
+  Future<void> _checkAndShowFeedback(Ride ride) async {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final feedbackProvider = Provider.of<FeedbackProvider>(
+      context,
+      listen: false,
+    );
+
+    if (auth.currentUser == null) return;
+
+    // Check if we already handled this in this session
+    final prefs = await SharedPreferences.getInstance();
+    final localKey = 'feedback_submitted_${ride.id}';
+    if (prefs.getBool(localKey) == true) return;
+
+    final hasFeedback = await feedbackProvider.hasSubmittedFeedback(
+      ride.id,
+      auth.currentUser!.id,
+    );
+
+    if (!hasFeedback) {
+      if (mounted) _showFeedbackDialog(ride);
+    } else {
+      if (mounted) await prefs.setBool(localKey, true);
+    }
+  }
+
+  void _showFeedbackDialog(Ride ride) {
+    double rating = 5.0;
+    final commentController = TextEditingController();
+
+    showDialog(
+      context: context,
+      barrierDismissible: false, // Force feedback or explicit cancel
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          title: Text('Rate your trip with ${ride.hostName}'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Your trip has ended. Please rate your experience to help our community.',
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(
+                  5,
+                  (index) => IconButton(
+                    icon: Icon(
+                      index < rating
+                          ? Icons.star_rounded
+                          : Icons.star_border_rounded,
+                      color: Colors.orange,
+                      size: 32,
+                    ),
+                    onPressed: () => setDialogState(() => rating = index + 1.0),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: commentController,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  hintText: 'Add a comment (optional)',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  filled: true,
+                  fillColor: Colors.grey.shade50,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Later'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final auth = Provider.of<AuthProvider>(context, listen: false);
+                final feedbackProvider = Provider.of<FeedbackProvider>(
+                  context,
+                  listen: false,
+                );
+
+                final feedback = RideFeedback(
+                  id: '',
+                  rideId: ride.id,
+                  hostId: ride.hostId,
+                  hostName: ride.hostName,
+                  passengerId: auth.currentUser!.id,
+                  passengerName: auth.currentUser!.name,
+                  rating: rating,
+                  comment: commentController.text.trim(),
+                  createdAt: DateTime.now(),
+                );
+
+                final success = await feedbackProvider.submitFeedback(feedback);
+                if (success && mounted) {
+                  // Save locally to prevent immediate reappearance
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setBool('feedback_submitted_${ride.id}', true);
+
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Thank you for your feedback!'),
+                    ),
+                  );
+                }
+              },
+              child: const Text('Submit'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -50,6 +178,8 @@ class _HomePageState extends State<HomePage> {
                 children: [
                   // _buildEcoCard(),
                   // const SizedBox(height: 24),
+                  if (user != null) _buildAcceptedRides(user.id),
+                  const SizedBox(height: 12),
                   _buildMyActiveTrips(user?.id),
                   const SizedBox(height: 24),
                   if (user != null) _buildIncomingRequestsWatcher(user.id),
@@ -67,7 +197,8 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ),
                       TextButton(
-                        onPressed: () => Navigator.pushNamed(context, '/find_ride'),
+                        onPressed: () =>
+                            Navigator.pushNamed(context, '/find_ride'),
                         child: const Text('View All'),
                       ),
                     ],
@@ -83,8 +214,144 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Widget _buildAcceptedRides(String userId) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('ride_requests')
+          .where('passengerId', isEqualTo: userId)
+          .where('status', isEqualTo: 'accepted')
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty)
+          return const SizedBox.shrink();
+
+        return Column(
+          children: snapshot.data!.docs.map((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            final rideId = data['rideId'];
+
+            return StreamBuilder<DocumentSnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('rides')
+                  .doc(rideId)
+                  .snapshots(),
+              builder: (context, rideSnapshot) {
+                if (!rideSnapshot.hasData || !rideSnapshot.data!.exists)
+                  return const SizedBox.shrink();
+
+                final rideData =
+                    rideSnapshot.data!.data() as Map<String, dynamic>;
+
+                final status = rideData['status'];
+                if (status == 'completed') {
+                  final ride = _mapDocToRide(rideSnapshot.data!);
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    _checkAndShowFeedback(ride);
+                  });
+                  return const SizedBox.shrink();
+                }
+
+                if (status == 'cancelled') return const SizedBox.shrink();
+
+                final ride = _mapDocToRide(rideSnapshot.data!);
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.green.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: Colors.green.withOpacity(0.3),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.check_circle_rounded,
+                              color: Colors.green,
+                              size: 16,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'ACCEPTED & UPCOMING',
+                              style: GoogleFonts.outfit(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.green.shade800,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      _buildRideCard(ride),
+                    ],
+                  ),
+                );
+              },
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
+
+  Ride _mapDocToRide(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    return Ride(
+      id: doc.id,
+      hostId: data['hostId'] ?? '',
+      hostName: data['hostName'] ?? '',
+      type: RideType.values.firstWhere(
+        (e) => e.toString().split('.').last == data['type'],
+        orElse: () => RideType.offer,
+      ),
+      from: RideLocation(
+        name: data['from']['name'] ?? '',
+        latitude: (data['from']['latitude'] ?? 0.0).toDouble(),
+        longitude: (data['from']['longitude'] ?? 0.0).toDouble(),
+      ),
+      to: RideLocation(
+        name: data['to']['name'] ?? '',
+        latitude: (data['to']['latitude'] ?? 0.0).toDouble(),
+        longitude: (data['to']['longitude'] ?? 0.0).toDouble(),
+      ),
+      dateTime: (data['dateTime'] as Timestamp).toDate(),
+      seats: data['seats'] ?? 1,
+      price: (data['price'] ?? 0).toDouble(),
+      status: RideStatus.values.firstWhere(
+        (e) => e.toString().split('.').last == data['status'],
+        orElse: () => RideStatus.open,
+      ),
+      vehicleType: VehicleType.values.firstWhere(
+        (e) => e.toString().split('.').last == data['vehicleType'],
+        orElse: () => VehicleType.car,
+      ),
+      note: data['note'] ?? '',
+      hostLatitude: (data['hostLatitude'] as num?)?.toDouble(),
+      hostLongitude: (data['hostLongitude'] as num?)?.toDouble(),
+      noAlcohol: data['noAlcohol'] ?? false,
+      noSmoking: data['noSmoking'] ?? false,
+      noPets: data['noPets'] ?? false,
+      noLuggage: data['noLuggage'] ?? false,
+      isLive: data['isLive'] ?? false,
+    );
+  }
+
   Widget _buildIncomingRequestsWatcher(String userId) {
-    final requestProvider = Provider.of<RideRequestProvider>(context, listen: false);
+    final requestProvider = Provider.of<RideRequestProvider>(
+      context,
+      listen: false,
+    );
     return StreamBuilder<List<RideRequest>>(
       stream: requestProvider.getIncomingRequests(userId),
       builder: (context, snapshot) {
@@ -97,11 +364,19 @@ class _HomePageState extends State<HomePage> {
           children: [
             Row(
               children: [
-                const Icon(Icons.notifications_active_rounded, color: Colors.orange, size: 20),
+                const Icon(
+                  Icons.notifications_active_rounded,
+                  color: Colors.orange,
+                  size: 20,
+                ),
                 const SizedBox(width: 8),
                 Text(
                   'Ride Requests (${requests.length})',
-                  style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.orange.shade800),
+                  style: GoogleFonts.outfit(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.orange.shade800,
+                  ),
                 ),
               ],
             ),
@@ -124,7 +399,10 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildRequestCard(RideRequest request) {
-    final requestProvider = Provider.of<RideRequestProvider>(context, listen: false);
+    final requestProvider = Provider.of<RideRequestProvider>(
+      context,
+      listen: false,
+    );
     return Container(
       width: 280,
       margin: const EdgeInsets.only(right: 16),
@@ -133,7 +411,13 @@ class _HomePageState extends State<HomePage> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.orange.withOpacity(0.3)),
-        boxShadow: [BoxShadow(color: Colors.orange.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.orange.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -143,13 +427,22 @@ class _HomePageState extends State<HomePage> {
               CircleAvatar(
                 radius: 18,
                 backgroundColor: Colors.orange.withOpacity(0.1),
-                child: Text(request.passengerName[0], style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
+                child: Text(
+                  request.passengerName[0],
+                  style: const TextStyle(
+                    color: Colors.orange,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   '${request.passengerName} wants to join',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -166,9 +459,14 @@ class _HomePageState extends State<HomePage> {
                     foregroundColor: Colors.red,
                     side: const BorderSide(color: Colors.red),
                     padding: const EdgeInsets.symmetric(vertical: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
-                  child: const Text('Reject', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  child: const Text(
+                    'Reject',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -179,9 +477,14 @@ class _HomePageState extends State<HomePage> {
                     backgroundColor: Colors.green,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
-                  child: const Text('Accept', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  child: const Text(
+                    'Accept',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
             ],
@@ -209,9 +512,7 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         background: Container(
-          decoration: const BoxDecoration(
-            gradient: AppColors.primaryGradient,
-          ),
+          decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
         ),
       ),
       actions: [
@@ -223,20 +524,26 @@ class _HomePageState extends State<HomePage> {
                 color: Colors.white.withOpacity(0.2),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.admin_panel_settings_rounded, color: Colors.white, size: 20),
+              child: const Icon(
+                Icons.admin_panel_settings_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
             ),
             onPressed: () => Navigator.pushNamed(context, '/admin_dashboard'),
           ),
 
         // Notification Icon with Badge
         StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance.collection('announcements').snapshots(),
+          stream: FirebaseFirestore.instance
+              .collection('announcements')
+              .snapshots(),
           builder: (context, snapshot) {
             bool hasNew = false;
-            // Simple logic: if there are any docs, show dot. 
+            // Simple logic: if there are any docs, show dot.
             // In real app, check timestamps against shared_prefs 'last_checked'
             if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
-               hasNew = true; 
+              hasNew = true;
             }
 
             return Stack(
@@ -248,9 +555,18 @@ class _HomePageState extends State<HomePage> {
                       color: Colors.white.withOpacity(0.2),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.notifications_none_rounded, color: Colors.white, size: 20),
+                    child: const Icon(
+                      Icons.notifications_none_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
                   ),
-                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsPage())),
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const NotificationsPage(),
+                    ),
+                  ),
                 ),
                 if (hasNew)
                   Positioned(
@@ -338,7 +654,11 @@ class _HomePageState extends State<HomePage> {
               color: AppColors.primary.withOpacity(0.1),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.eco_rounded, color: AppColors.primary, size: 32),
+            child: const Icon(
+              Icons.eco_rounded,
+              color: AppColors.primary,
+              size: 32,
+            ),
           ),
           const SizedBox(width: 20),
           Expanded(
@@ -390,7 +710,14 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildActionCard(BuildContext context, String title, String subtitle, IconData icon, Color color, VoidCallback onTap) {
+  Widget _buildActionCard(
+    BuildContext context,
+    String title,
+    String subtitle,
+    IconData icon,
+    Color color,
+    VoidCallback onTap,
+  ) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -430,10 +757,7 @@ class _HomePageState extends State<HomePage> {
             const SizedBox(height: 4),
             Text(
               subtitle,
-              style: TextStyle(
-                fontSize: 12,
-                color: AppColors.textSecondary,
-              ),
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
             ),
           ],
         ),
@@ -445,10 +769,12 @@ class _HomePageState extends State<HomePage> {
     return Consumer<RideProvider>(
       builder: (context, rideProvider, _) {
         if (rideProvider.isLoading) {
-          return const Center(child: Padding(
-            padding: EdgeInsets.all(40.0),
-            child: CircularProgressIndicator(),
-          ));
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(40.0),
+              child: CircularProgressIndicator(),
+            ),
+          );
         }
         if (rideProvider.availableRides.isEmpty) {
           return const SizedBox.shrink();
@@ -502,7 +828,13 @@ class _HomePageState extends State<HomePage> {
                     CircleAvatar(
                       radius: 20,
                       backgroundColor: AppColors.primary.withOpacity(0.1),
-                      child: Text(ride.hostName[0], style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+                      child: Text(
+                        ride.hostName[0],
+                        style: const TextStyle(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -511,20 +843,44 @@ class _HomePageState extends State<HomePage> {
                         children: [
                           Text(
                             ride.hostName,
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
                           ),
                           Row(
                             children: [
-                              Icon(Icons.star_rounded, size: 16, color: Colors.orange.shade400),
-                              const Text(' 4.9 • ', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
-                              Text(ride.vehicleType == VehicleType.bike ? 'Motorcycle' : 'Car', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                              Icon(
+                                Icons.star_rounded,
+                                size: 16,
+                                color: Colors.orange.shade400,
+                              ),
+                              const Text(
+                                ' 4.9 • ',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              Text(
+                                ride.vehicleType == VehicleType.bike
+                                    ? 'Motorcycle'
+                                    : 'Car',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
                             ],
                           ),
                         ],
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         color: AppColors.primary.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(12),
@@ -549,13 +905,21 @@ class _HomePageState extends State<HomePage> {
                   children: [
                     Column(
                       children: [
-                        const Icon(Icons.radio_button_checked, size: 18, color: AppColors.primary),
+                        const Icon(
+                          Icons.radio_button_checked,
+                          size: 18,
+                          color: AppColors.primary,
+                        ),
                         Container(
                           height: 30,
                           width: 2,
                           color: Colors.grey.shade200,
                         ),
-                        const Icon(Icons.location_on_rounded, size: 18, color: AppColors.secondary),
+                        const Icon(
+                          Icons.location_on_rounded,
+                          size: 18,
+                          color: AppColors.secondary,
+                        ),
                       ],
                     ),
                     const SizedBox(width: 16),
@@ -567,14 +931,20 @@ class _HomePageState extends State<HomePage> {
                             ride.from.name,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 15,
+                            ),
                           ),
                           const SizedBox(height: 24),
                           Text(
                             ride.to.name,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 15,
+                            ),
                           ),
                         ],
                       ),
@@ -584,18 +954,28 @@ class _HomePageState extends State<HomePage> {
                       children: [
                         Text(
                           '${ride.dateTime.hour.toString().padLeft(2, '0')}:${ride.dateTime.minute.toString().padLeft(2, '0')}',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
                         ),
                         const SizedBox(height: 4),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.grey.shade100,
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
                             '${ride.seats} seats',
-                            style: TextStyle(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: AppColors.textSecondary,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ],
@@ -615,10 +995,13 @@ class _HomePageState extends State<HomePage> {
 
     return Consumer<RideProvider>(
       builder: (context, provider, _) {
-        final activeTrips = provider.myRides.where((r) => 
-          r.status != RideStatus.completed && 
-          r.status != RideStatus.cancelled
-        ).toList();
+        final activeTrips = provider.myRides
+            .where(
+              (r) =>
+                  r.status != RideStatus.completed &&
+                  r.status != RideStatus.cancelled,
+            )
+            .toList();
 
         if (activeTrips.isEmpty) return const SizedBox.shrink();
 
@@ -629,11 +1012,15 @@ class _HomePageState extends State<HomePage> {
               padding: const EdgeInsets.only(left: 4, bottom: 12),
               child: Text(
                 'My Active Rides',
-                style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                style: GoogleFonts.outfit(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
               ),
             ),
             SizedBox(
-              height: 200,
+              height: 240,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
                 itemCount: activeTrips.length,
@@ -648,19 +1035,20 @@ class _HomePageState extends State<HomePage> {
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        colors: isOngoing 
-                          ? [Colors.blue.shade700, Colors.blue.shade900]
-                          : [Colors.indigo.shade500, Colors.indigo.shade800],
+                        colors: isOngoing
+                            ? [Colors.blue.shade700, Colors.blue.shade900]
+                            : [Colors.indigo.shade500, Colors.indigo.shade800],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
                       borderRadius: BorderRadius.circular(24),
                       boxShadow: [
                         BoxShadow(
-                          color: (isOngoing ? Colors.blue : Colors.indigo).withOpacity(0.3),
+                          color: (isOngoing ? Colors.blue : Colors.indigo)
+                              .withOpacity(0.3),
                           blurRadius: 12,
-                          offset: const Offset(0, 6)
-                        )
+                          offset: const Offset(0, 6),
+                        ),
                       ],
                     ),
                     child: Column(
@@ -669,78 +1057,151 @@ class _HomePageState extends State<HomePage> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            isHost 
-                              ? Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(20)),
-                                  child: const Text('YOUR OFFER', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 9)),
-                                )
-                              : FutureBuilder<RideRequestStatus?>(
-                                  future: Provider.of<RideRequestProvider>(context, listen: false).getRequestStatus(ride.id, userId),
-                                  builder: (context, statusSnapshot) {
-                                    final status = statusSnapshot.data;
-                                    String label = isOngoing ? 'ONGOING' : 'ACCEPTED';
-                                    if (status == RideRequestStatus.pending) label = 'PENDING';
-                                    
-                                    return Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                      decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(20)),
-                                      child: Text(
-                                        label,
-                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 9),
+                            isHost
+                                ? Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: const Text(
+                                      'YOUR OFFER',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 9,
                                       ),
-                                    );
-                                  },
-                                ),
+                                    ),
+                                  )
+                                : FutureBuilder<RideRequestStatus?>(
+                                    future: Provider.of<RideRequestProvider>(
+                                      context,
+                                      listen: false,
+                                    ).getRequestStatus(ride.id, userId),
+                                    builder: (context, statusSnapshot) {
+                                      final status = statusSnapshot.data;
+                                      String label = isOngoing
+                                          ? 'ONGOING'
+                                          : 'ACCEPTED';
+                                      if (status == RideRequestStatus.pending)
+                                        label = 'PENDING';
+
+                                      return Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 4,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white.withOpacity(0.2),
+                                          borderRadius: BorderRadius.circular(
+                                            20,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          label,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 9,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
                             if (isHost && isOngoing)
                               Switch.adaptive(
                                 value: ride.isLive,
                                 activeColor: Colors.greenAccent,
-                                onChanged: (val) => provider.toggleLiveTracking(ride.id, val, userId),
+                                onChanged: (val) => provider.toggleLiveTracking(
+                                  ride.id,
+                                  val,
+                                  userId,
+                                ),
                               ),
                           ],
                         ),
                         const Spacer(),
                         Text(
                           ride.to.name,
-                          style: GoogleFonts.outfit(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                          style: GoogleFonts.outfit(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                         Text(
-                          isHost ? 'Hosting: ${ride.seats} seats' : 'Host: ${ride.hostName}',
-                          style: const TextStyle(color: Colors.white70, fontSize: 12),
+                          isHost
+                              ? 'Hosting: ${ride.seats} seats'
+                              : 'Host: ${ride.hostName}',
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                          ),
                         ),
                         const SizedBox(height: 16),
                         Row(
                           children: [
                             Expanded(
                               child: ElevatedButton(
-                                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => RideDetailPage(ride: ride))),
+                                onPressed: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => RideDetailPage(ride: ride),
+                                  ),
+                                ),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.white,
                                   foregroundColor: Colors.blue.shade900,
-                                  padding: const EdgeInsets.symmetric(vertical: 0),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 0,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
                                 ),
-                                child: const Text('Details', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                child: const Text(
+                                  'Details',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                               ),
                             ),
                             if (isHost && !isOngoing) ...[
                               const SizedBox(width: 8),
                               Expanded(
                                 child: ElevatedButton(
-                                  onPressed: () => provider.updateRideStatus(ride.id, RideStatus.ongoing, userId),
+                                  onPressed: () => provider.updateRideStatus(
+                                    ride.id,
+                                    RideStatus.ongoing,
+                                    userId,
+                                  ),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.greenAccent,
                                     foregroundColor: Colors.black,
-                                    padding: const EdgeInsets.symmetric(vertical: 0),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 0,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
                                   ),
-                                  child: const Text('Start', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                  child: const Text(
+                                    'Start',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                                 ),
                               ),
-                            ]
+                            ],
                           ],
                         ),
                       ],
@@ -768,9 +1229,14 @@ class _HomePageState extends State<HomePage> {
             const Text('Emergency SOS'),
           ],
         ),
-        content: const Text('Are you in an emergency? This will notify local authorities and share your live location.'),
+        content: const Text(
+          'Are you in an emergency? This will notify local authorities and share your live location.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () {
@@ -798,7 +1264,10 @@ class _HomePageState extends State<HomePage> {
         title: const Text('Logout'),
         content: const Text('Are you sure you want to sign out from EcoRide?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
           TextButton(
             style: TextButton.styleFrom(foregroundColor: Colors.red),
             onPressed: () {

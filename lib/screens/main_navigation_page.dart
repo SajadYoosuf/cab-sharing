@@ -23,15 +23,13 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: _pages,
-      ),
+      body: IndexedStack(index: _selectedIndex, children: _pages),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: Colors.white,
           boxShadow: [
             BoxShadow(
+              // ignore: deprecated_member_use
               color: Colors.black.withOpacity(0.05),
               blurRadius: 20,
               offset: const Offset(0, -5),
@@ -69,8 +67,14 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
               backgroundColor: Colors.transparent,
               selectedItemColor: AppColors.primary,
               unselectedItemColor: Colors.grey.shade400,
-              selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-              unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 12),
+              selectedLabelStyle: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+              ),
+              unselectedLabelStyle: const TextStyle(
+                fontWeight: FontWeight.w500,
+                fontSize: 12,
+              ),
               type: BottomNavigationBarType.fixed,
             ),
           ),
