@@ -3,15 +3,9 @@ import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:ride_share_app/core/constants/app_colors.dart';
 import 'package:ride_share_app/providers/auth_provider.dart';
-
 import 'dart:io';
 import 'dart:convert';
-import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:ride_share_app/core/constants/app_colors.dart';
-import 'package:ride_share_app/providers/auth_provider.dart';
 import 'package:ride_share_app/models/user.dart';
 
 class AccountSettingsPage extends StatefulWidget {
