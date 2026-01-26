@@ -19,6 +19,7 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
   final _repository = AdminAuthRepository();
   bool _isLoading = false;
   String _errorMessage = '';
+  bool _isPasswordVisible = false;
 
   void _login() async {
     setState(() {
@@ -31,80 +32,121 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
     final inputPass = _passwordController.text.trim();
 
     // 1. Support hardcoded admin shortcut
-    if ((inputEmail == 'admin' || inputEmail == 'admin@ecoride.com') && inputPass == 'admin123') {
-       const adminEmail = 'admin@ecoride.com';
-       const adminPass = 'admin123';
-       bool success = await authProvider.login(adminEmail, adminPass);
-       
-       if (!success) {
-         // Fallback A: Manual Firestore check (bypass auth issues)
-         try {
-           final snapshot = await FirebaseFirestore.instance
-               .collection('users')
-               .where('email', isEqualTo: 'admin@ecoride.com')
-               .limit(1).get();
+    if ((inputEmail == 'admin' || inputEmail == 'admin@ecoride.com') &&
+        inputPass == 'admin123') {
+      const adminEmail = 'admin@ecoride.com';
+      const adminPass = 'admin123';
+      bool success = await authProvider.login(adminEmail, adminPass);
 
-           if (snapshot.docs.isNotEmpty) {
-             final doc = snapshot.docs.first;
-             if (doc.data()['role'] == 'admin') {
-                final adminUser = UserModel.fromMap({...doc.data(), 'id': doc.id});
-                await Provider.of<AuthProvider>(context, listen: false).setManualUser(adminUser);
-                if (mounted) {
-                  Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const AdminDashboardPage()), (r) => false);
-                }
-                return;
-             }
-           }
-         } catch (e) { print('Manual check failed: $e'); }
+      if (!success) {
+        // Fallback A: Manual Firestore check (bypass auth issues)
+        try {
+          final snapshot = await FirebaseFirestore.instance
+              .collection('users')
+              .where('email', isEqualTo: 'admin@ecoride.com')
+              .limit(1)
+              .get();
 
-         // Fallback B: Attempt auto-registration
-         final registerSuccess = await authProvider.register('Administrator', adminEmail, adminPass);
-         if (registerSuccess) {
-            success = true;
-         } else {
-            final error = authProvider.error ?? '';
-            if (mounted) {
-               setState(() {
-                 _errorMessage = error.contains('already registered') ? 'Incorrect password for existing admin.' : error;
-                 _isLoading = false;
-               });
+          if (snapshot.docs.isNotEmpty) {
+            final doc = snapshot.docs.first;
+            if (doc.data()['role'] == 'admin') {
+              final adminUser = UserModel.fromMap({
+                ...doc.data(),
+                'id': doc.id,
+              });
+              await Provider.of<AuthProvider>(
+                context,
+                listen: false,
+              ).setManualUser(adminUser);
+              if (mounted) {
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AdminDashboardPage()),
+                  (r) => false,
+                );
+              }
+              return;
             }
-            return;
-         }
-       }
+          }
+        } catch (e) {
+          print('Manual check failed: $e');
+        }
 
-       if (success) {
-         // Update/Ensure role
-         try {
-            await FirebaseFirestore.instance.collection('users').doc(authProvider.currentUser!.id).set({
-              'role': 'admin',
-              'email': adminEmail,
-              'name': 'Administrator',
-              'verificationStatus': 'approved',
-            }, SetOptions(merge: true));
-            await authProvider.checkAuthStatus();
-         } catch (e) { print('Role update failed: $e'); }
+        // Fallback B: Attempt auto-registration
+        final registerSuccess = await authProvider.register(
+          'Administrator',
+          adminEmail,
+          adminPass,
+        );
+        if (registerSuccess) {
+          success = true;
+        } else {
+          final error = authProvider.error ?? '';
+          if (mounted) {
+            setState(() {
+              _errorMessage = error.contains('already registered')
+                  ? 'Incorrect password for existing admin.'
+                  : error;
+              _isLoading = false;
+            });
+          }
+          return;
+        }
+      }
 
-         if (mounted) {
-            Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const AdminDashboardPage()), (r) => false);
-         }
-       }
+      if (success) {
+        // Update/Ensure role
+        try {
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(authProvider.currentUser!.id)
+              .set({
+                'role': 'admin',
+                'email': adminEmail,
+                'name': 'Administrator',
+                'verificationStatus': 'approved',
+              }, SetOptions(merge: true));
+          await authProvider.checkAuthStatus();
+        } catch (e) {
+          print('Role update failed: $e');
+        }
+
+        if (mounted) {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => const AdminDashboardPage()),
+            (r) => false,
+          );
+        }
+      }
     } else {
-       // 2. Regular Admin Login
-       final success = await authProvider.login(inputEmail, inputPass);
-       if (success) {
-         final user = authProvider.currentUser;
-         if (user != null && user.role == 'admin') {
-            if (mounted) Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const AdminDashboardPage()), (r) => false);
-         } else {
-            if (mounted) {
-               setState(() { _errorMessage = 'Access Denied: Not an admin account'; _isLoading = false; });
-               authProvider.logout();
-            }
-         }
-       } else {
-         if (mounted) setState(() { _errorMessage = authProvider.error ?? 'Login Failed'; _isLoading = false; });
-       }
+      // 2. Regular Admin Login
+      final success = await authProvider.login(inputEmail, inputPass);
+      if (success) {
+        final user = authProvider.currentUser;
+        if (user != null && user.role == 'admin') {
+          if (mounted)
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (_) => const AdminDashboardPage()),
+              (r) => false,
+            );
+        } else {
+          if (mounted) {
+            setState(() {
+              _errorMessage = 'Access Denied: Not an admin account';
+              _isLoading = false;
+            });
+            authProvider.logout();
+          }
+        }
+      } else {
+        if (mounted)
+          setState(() {
+            _errorMessage = authProvider.error ?? 'Login Failed';
+            _isLoading = false;
+          });
+      }
     }
   }
 
@@ -123,70 +165,102 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
             const SizedBox(height: 12),
             TextField(
               controller: _passwordController,
-              decoration: const InputDecoration(labelText: 'Password'),
-              obscureText: true,
+              decoration: InputDecoration(
+                labelText: 'Password',
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _isPasswordVisible
+                        ? Icons.visibility
+                        : Icons.visibility_off,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _isPasswordVisible = !_isPasswordVisible;
+                    });
+                  },
+                ),
+              ),
+              obscureText: !_isPasswordVisible,
             ),
             const SizedBox(height: 20),
             if (_errorMessage.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(bottom: 20),
-                child: Text(_errorMessage, style: const TextStyle(color: Colors.red)),
+                child: Text(
+                  _errorMessage,
+                  style: const TextStyle(color: Colors.red),
+                ),
               ),
-              
+
             if (_isLoading)
               const CircularProgressIndicator()
             else
               Column(
                 children: [
-                   ElevatedButton(
+                  ElevatedButton(
                     onPressed: _login,
                     style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 40,
+                        vertical: 12,
+                      ),
                     ),
                     child: const Text('Login', style: TextStyle(fontSize: 16)),
                   ),
                   const SizedBox(height: 20),
                   // Debug/Rescue Options
                   ExpansionTile(
-                    title: const Text('Developer Options', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    title: const Text(
+                      'Developer Options',
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
                     children: [
-                       Padding(
-                         padding: const EdgeInsets.all(8.0),
-                         child: Column(
-                           children: [
-                             const Text('Force Login with UID:', style: TextStyle(fontSize: 12)),
-                             TextField(
-                               decoration: const InputDecoration(
-                                 hintText: 'e.g. go6e3xQJ7kCl1Opj0T0b',
-                                 isDense: true,
-                                 border: OutlineInputBorder(),
-                               ),
-                               onSubmitted: (uid) async {
-                                  if (uid.isEmpty) return;
+                      Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Column(
+                          children: [
+                            const Text(
+                              'Force Login with UID:',
+                              style: TextStyle(fontSize: 12),
+                            ),
+                            TextField(
+                              decoration: const InputDecoration(
+                                hintText: 'e.g. go6e3xQJ7kCl1Opj0T0b',
+                                isDense: true,
+                                border: OutlineInputBorder(),
+                              ),
+                              onSubmitted: (uid) async {
+                                if (uid.isEmpty) return;
+                                setState(() => _isLoading = true);
+                                _bypassWithUid(uid);
+                              },
+                            ),
+                            const SizedBox(height: 12),
+                            const Divider(),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Known Accounts:',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.grey,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton(
+                                onPressed: () {
+                                  // Pre-fill and submit automatically for the requested account
+                                  final uid = 'go6e3xQJ7kCl1Opj0T0b';
                                   setState(() => _isLoading = true);
                                   _bypassWithUid(uid);
-                               },
-                             ),
-                             const SizedBox(height: 12),
-                             const Divider(),
-                             const SizedBox(height: 8),
-                             const Text('Known Accounts:', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                             const SizedBox(height: 8),
-                             SizedBox(
-                               width: double.infinity,
-                               child: OutlinedButton(
-                                 onPressed: () {
-                                    // Pre-fill and submit automatically for the requested account
-                                    final uid = 'go6e3xQJ7kCl1Opj0T0b';
-                                    setState(() => _isLoading = true);
-                                    _bypassWithUid(uid);
-                                 },
-                                 child: const Text('Rescue Admin (go6e3x...)'),
-                               ),
-                             ),
-                           ],
-                         ),
-                       )
+                                },
+                                child: const Text('Rescue Admin (go6e3x...)'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ],
@@ -198,29 +272,39 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
   }
 
   Future<void> _bypassWithUid(String uid) async {
-      try {
-          final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-          if (doc.exists) {
-            final user = UserModel.fromMap({...doc.data()!, 'id': doc.id});
-            if (user.role == 'admin') {
-              if (mounted) {
-                 await Provider.of<AuthProvider>(context, listen: false).setManualUser(user);
-                 Navigator.pushAndRemoveUntil(
-                    context,
-                    MaterialPageRoute(builder: (context) => const AdminDashboardPage()),
-                    (route) => false,
-                 );
-              }
-            } else {
-              if (mounted) setState(() => _errorMessage = 'User found but ROLE is not admin');
-            }
-          } else {
-            if (mounted) setState(() => _errorMessage = 'No user found with this UID');
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get();
+      if (doc.exists) {
+        final user = UserModel.fromMap({...doc.data()!, 'id': doc.id});
+        if (user.role == 'admin') {
+          if (mounted) {
+            await Provider.of<AuthProvider>(
+              context,
+              listen: false,
+            ).setManualUser(user);
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const AdminDashboardPage(),
+              ),
+              (route) => false,
+            );
           }
-      } catch (e) {
-          if (mounted) setState(() => _errorMessage = 'Bypass Error: $e');
-      } finally {
-          if (mounted) setState(() => _isLoading = false);
+        } else {
+          if (mounted)
+            setState(() => _errorMessage = 'User found but ROLE is not admin');
+        }
+      } else {
+        if (mounted)
+          setState(() => _errorMessage = 'No user found with this UID');
       }
+    } catch (e) {
+      if (mounted) setState(() => _errorMessage = 'Bypass Error: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 }

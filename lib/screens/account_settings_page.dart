@@ -6,7 +6,6 @@ import 'package:ride_share_app/providers/auth_provider.dart';
 import 'dart:io';
 import 'dart:convert';
 import 'package:image_picker/image_picker.dart';
-import 'package:ride_share_app/models/user.dart';
 
 class AccountSettingsPage extends StatefulWidget {
   const AccountSettingsPage({super.key});
@@ -96,11 +95,6 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
   @override
   Widget build(BuildContext context) {
     final user = Provider.of<AuthProvider>(context).currentUser;
-    final hasImage =
-        _newProfileImage != null ||
-        (user?.selfieBase64 != null && user!.selfieBase64!.isNotEmpty) ||
-        (user?.selfieUrl != null && user!.selfieUrl!.isNotEmpty);
-
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -205,16 +199,12 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                 readOnly: true,
               ),
               const SizedBox(height: 16),
-              TextFormField(
-                controller: _phoneController,
-                keyboardType: TextInputType.phone,
-                decoration: _inputDecoration(
-                  'Phone Number',
-                  Icons.phone_android_rounded,
-                ),
-                validator: (v) => v?.isNotEmpty == true
-                    ? null
-                    : 'Phone required', // Allow empty? user said profile editing. Assuming phone is editable.
+              const SizedBox(height: 4),
+              _buildInputTile(
+                'Phone Number',
+                _phoneController,
+                Icons.phone_android_rounded,
+                readOnly: true,
               ),
 
               const SizedBox(height: 48),
@@ -298,24 +288,6 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         ),
         validator: (v) => v!.isEmpty ? '$label is required' : null,
       ),
-    );
-  }
-
-  InputDecoration _inputDecoration(String label, IconData icon) {
-    return InputDecoration(
-      labelText: label,
-      prefixIcon: Icon(icon, color: Colors.grey),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.grey.shade300),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.primary, width: 2),
-      ),
-      filled: true,
-      fillColor: Colors.white,
     );
   }
 }
